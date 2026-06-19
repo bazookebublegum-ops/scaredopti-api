@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>ScaredOpti</title>
+
+    <style>
+        body {
+            margin: 0;
+            height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            background: radial-gradient(circle at top, #1a1a1a, #000);
+            font-family: Arial;
+            color: white;
+        }
+
+        .card {
+            background: rgba(255, 255, 255, 0.05);
+            padding: 40px;
+            border-radius: 16px;
+            backdrop-filter: blur(12px);
+            box-shadow: 0 0 30px rgba(0,0,0,0.6);
+            text-align: center;
+            width: 320px;
+        }
+
+        input {
+            width: 100%;
+            padding: 12px;
+            border: none;
+            border-radius: 8px;
+            margin-bottom: 15px;
+            background: rgba(255,255,255,0.1);
+            color: white;
+            outline: none;
+        }
+
+        button {
+            width: 100%;
+            padding: 12px;
+            border: none;
+            border-radius: 8px;
+            background: #6c5ce7;
+            color: white;
+            cursor: pointer;
+            transition: 0.2s;
+        }
+
+        button:hover {
+            background: #a29bfe;
+            transform: scale(1.05);
+        }
+
+        .status {
+            margin-top: 15px;
+            font-size: 14px;
+        }
+    </style>
+</head>
+
+<body>
+
+<div class="card">
+    <h1>ScaredOpti</h1>
+
+    <input id="key" placeholder="Enter your key">
+
+    <button onclick="checkKey()">Activate</button>
+
+    <div class="status" id="status">Waiting...</div>
+</div>
+
+<script>
+async function checkKey() {
+    let key = document.getElementById("key").value;
+
+    let res = await fetch("/check", {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({key: key})
+    });
+
+    let data = await res.json();
+
+    let status = document.getElementById("status");
+
+    if (data.status === "ok") {
+        status.innerText = "Activated ✔";
+        status.style.color = "lime";
+    } else if (data.status === "used") {
+        status.innerText = "Key already used ⚠";
+        status.style.color = "orange";
+    } else {
+        status.innerText = "Invalid key ❌";
+        status.style.color = "red";
+    }
+}
+</script>
+
+</body>
+</html>
