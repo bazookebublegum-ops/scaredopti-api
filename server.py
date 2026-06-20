@@ -1,33 +1,47 @@
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, render_template
 
 app = Flask(__name__)
 
-# база ключей (пока простая версия)
+# база ключей (простая версия)
 keys = {
     "ABC-123": False,  # False = не использован
     "TEST-999": False
 }
 
+# ======================
+# UI (интерфейс сайта)
+# ======================
 @app.route("/")
 def home():
-    return "ScaredOpti API is running"
+    return render_template("index.html")
 
+
+# ======================
+# API проверки ключа
+# ======================
 @app.route("/check", methods=["POST"])
 def check_key():
     data = request.json
     key = data.get("key")
 
-    # если ключ не существует
+    if not key:
+        return jsonify({"status": "error", "message": "no key provided"})
+
+    # ключ не существует
     if key not in keys:
         return jsonify({"status": "invalid"})
 
-    # если уже использован
-    if keys[key] == True:
+    # уже использован
+    if keys[key]:
         return jsonify({"status": "used"})
 
-    # первый раз используем
+    # первый запуск
     keys[key] = True
     return jsonify({"status": "ok"})
 
+
+# ======================
+# запуск сервера
+# ======================
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=10000)
