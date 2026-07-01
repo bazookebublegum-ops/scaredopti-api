@@ -13,7 +13,6 @@ KEYS_FILE = "keys.json"
 BETA_DURATION_DAYS = 30
 
 # ⚠️ ВАЖНО: Сгенерируй новый вебхук в Discord! 
-# Этот URL был опубликован публично и скомпрометирован.
 DISCORD_WEBHOOK_URL = "https://discord.com/api/webhooks/1521995764622950532/XwyYLU7d4dVKcU21ilcgGppBxzZOQ1S8e8itwZhfwzxgy1j2IOUXYhYUnMe_s0Myymf-" 
 
 def send_discord_alert(title, description, color=0xFF0000):
@@ -121,7 +120,8 @@ if not keys:
         keys[key] = {
             "used": False, "tier": tier, "hwid": None, 
             "first_ip": None, "activated_at": None, 
-            "expires_at": None, "banned": False, "ban_reason": None
+            "last_login_at": None, "expires_at": None, 
+            "banned": False, "ban_reason": None
         }
     save_keys()
     print(f"[OK] Initialized {len(keys)} keys")
@@ -184,7 +184,7 @@ ADMIN_HTML = """
     <div class="container">
         <header>
             <h1>Scared Opti // Admin</h1>
-            <div style="font-size: 10px; color: var(--muted);">v2.3 STATUS TRACKING</div>
+            <div style="font-size: 10px; color: var(--muted);">v2.4 ANTI-SPAM EDITION</div>
         </header>
         
         <div class="stats">
@@ -211,6 +211,7 @@ ADMIN_HTML = """
                     <th onclick="sortTable('tier')">Tier <span class="sort-arrow" id="arrow-tier"></span></th>
                     <th onclick="sortTable('status')">Status <span class="sort-arrow" id="arrow-status"></span></th>
                     <th>HWID / IP</th>
+                    <th>Last Login</th>
                     <th>Actions</th>
                 </tr>
             </thead>
@@ -219,7 +220,6 @@ ADMIN_HTML = """
     </div>
 
     <script>
-        let currentTab = 'all';
         let sortField = 'key';
         let sortAsc = true;
         let allKeysData = [];
@@ -290,6 +290,9 @@ ADMIN_HTML = """
                         ${k.hwid ? k.hwid.substring(0,12)+'...' : '-'}<br>
                         ${k.first_ip || '-'}
                     </td>
+                    <td style="color:var(--muted); font-size:10px;">
+                        ${k.last_login_at ? new Date(k.last_login_at).toLocaleString() : '-'}
+                    </td>
                     <td class="actions">
                         ${k.banned 
                             ? `<button class="btn-sm" onclick="unban('${k.key}')">Unban</button>` 
@@ -348,7 +351,7 @@ def activate():
     
     k = keys[key]
     
-    # 1. ПРОВЕРКА НА УЖЕ ЗАБАНЕННЫЙ КЛЮЧ
+    # 1. ПРОВЕРКА НА УЖЕ ЗАБАНЕННЫЙ КЛЮЧ (БЕЗ СПАМА)
     if k.get("banned"):
         return jsonify({
             "status": "banned",
@@ -371,13 +374,13 @@ def activate():
             "hwid": hwid,
             "first_ip": client_ip,
             "activated_at": now.isoformat(),
+            "last_login_at": now.isoformat(),
             "expires_at": expires.isoformat(),
             "banned": False,
             "ban_reason": None
         })
         save_keys()
         
-        # ✅ Зеленое уведомление об активации
         send_discord_alert(
             "✅ New Activation", 
             f"**Key:** `{key}`\n**Tier:** {k['tier']}\n**IP:** {client_ip}\n**HWID:** `{hwid[:12]}...`",
@@ -396,7 +399,6 @@ def activate():
         k["ban_reason"] = "SHARING"
         save_keys()
         
-        # 🚫 Красное уведомление о шеринге
         send_discord_alert(
             "🚫 SHARING DETECTED!", 
             f"**Key:** `{key}` ({k['tier']})\n"
@@ -418,7 +420,6 @@ def activate():
         k["ban_reason"] = "IP_CHANGE"
         save_keys()
         
-        # 🌐 Желтое уведомление о смене IP
         send_discord_alert(
             "🌐 IP Change Detected", 
             f"**Key:** `{key}` ({k['tier']})\n"
@@ -433,18 +434,38 @@ def activate():
             "message": "IP CHANGE DETECTED. Key banned for security. Contact support."
         })
     
-    # Всё ок - легитимный вход
+    # 5. ЛОГИКА ПОВТОРНОГО ВХОДА (ANTI-SPAM)
+    last_login_str = k.get("last_login_at")
+    notify_user = False
+    
+    if not last_login_str:
+        notify_user = True
+    else:
+        try:
+            last_login = datetime.fromisoformat(last_login_str)
+            # Если прошло больше 30 минут с последнего входа - считаем это новой сессией
+            if (datetime.now() - last_login).total_seconds() > 1800: 
+                notify_user = True
+        except:
+            notify_user = True
+
+    # Обновляем время последнего входа ВСЕГДА
+    k["last_login_at"] = datetime.now().isoformat()
+    save_keys()
+
+    # Отправляем уведомление ТОЛЬКО если это новая сессия
+    if notify_user:
+        send_discord_alert(
+            "🔑 Successful Login", 
+            f"**Key:** `{key}` ({k['tier']})\n**IP:** {client_ip}\n**HWID:** `{hwid[:12]}...`",
+            color=0x0088FF
+        )
+    
+    # Возвращаем статус ОК всегда, чтобы приложение работало
     exp_ts = 0
     if k.get("expires_at"):
         try: exp_ts = int(datetime.fromisoformat(k["expires_at"]).timestamp())
         except: pass
-        
-    # 🔵 Синее уведомление об обычном входе
-    send_discord_alert(
-        "🔑 Successful Login", 
-        f"**Key:** `{key}` ({k['tier']})\n**IP:** {client_ip}\n**HWID:** `{hwid[:12]}...`",
-        color=0x0088FF
-    )
         
     return jsonify({"status": "ok", "tier": k["tier"], "expires_at": exp_ts})
 
@@ -461,7 +482,7 @@ def admin_keys():
         keys_list.append({
             "key": key, "tier": data["tier"], "used": data["used"],
             "hwid": data["hwid"], "first_ip": data["first_ip"],
-            "activated_at": data["activated_at"], 
+            "activated_at": data["activated_at"], "last_login_at": data.get("last_login_at"),
             "banned": data["banned"], "ban_reason": data.get("ban_reason")
         })
         
@@ -479,7 +500,8 @@ def admin_add():
     if d["key"] in keys: return jsonify({"status": "error"})
     keys[d["key"]] = {
         "used":False,"tier":d["tier"],"hwid":None,"first_ip":None,
-        "activated_at":None,"expires_at":None,"banned":False,"ban_reason":None
+        "activated_at":None,"last_login_at":None,"expires_at":None,
+        "banned":False,"ban_reason":None
     }
     save_keys()
     return jsonify({"status": "ok"})
@@ -511,5 +533,5 @@ def admin_del():
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 10000))
-    print(f"🔐 Scared Opti Server v2.3 | Port: {port} | Keys: {len(keys)}")
+    print(f"🔐 Scared Opti Server v2.4 | Port: {port} | Keys: {len(keys)}")
     app.run(host="0.0.0.0", port=port, debug=False)
