@@ -1,6 +1,7 @@
 from flask import Flask, request, jsonify, render_template_string
 import json
 import os
+import requests
 from datetime import datetime, timedelta
 
 app = Flask(__name__)
@@ -10,6 +11,28 @@ app = Flask(__name__)
 # ═══════════════════════════════════════════════
 KEYS_FILE = "keys.json"
 BETA_DURATION_DAYS = 30
+
+# ⚠️ ВАЖНО: Сгенерируй новый вебхук в Discord! 
+# Этот URL был опубликован публично и скомпрометирован.
+DISCORD_WEBHOOK_URL = "https://discord.com/api/webhooks/1521995764622950532/XwyYLU7d4dVKcU21ilcgGppBxzZOQ1S8e8itwZhfwzxgy1j2IOUXYhYUnMe_s0Myymf-" 
+
+def send_discord_alert(title, description, color=0xFF0000):
+    """Отправляет Embed-уведомление в Discord"""
+    if not DISCORD_WEBHOOK_URL or "ВСТАВЬ_СЮДА" in DISCORD_WEBHOOK_URL:
+        return
+    try:
+        payload = {
+            "embeds": [{
+                "title": title,
+                "description": description,
+                "color": color,
+                "timestamp": datetime.now().isoformat(),
+                "footer": {"text": "Scared Opti Security System"}
+            }]
+        }
+        requests.post(DISCORD_WEBHOOK_URL, json=payload, timeout=5)
+    except Exception as e:
+        print(f"[DISCORD ERROR] Failed to send alert: {e}")
 
 ALL_KEYS_DATA = {
     # BASIC KEYS (60)
@@ -353,6 +376,14 @@ def activate():
             "ban_reason": None
         })
         save_keys()
+        
+        # ✅ Зеленое уведомление об активации
+        send_discord_alert(
+            "✅ New Activation", 
+            f"**Key:** `{key}`\n**Tier:** {k['tier']}\n**IP:** {client_ip}\n**HWID:** `{hwid[:12]}...`",
+            color=0x00FF00
+        )
+        
         return jsonify({
             "status": "ok",
             "tier": k["tier"],
@@ -364,6 +395,19 @@ def activate():
         k["banned"] = True
         k["ban_reason"] = "SHARING"
         save_keys()
+        
+        # 🚫 Красное уведомление о шеринге
+        send_discord_alert(
+            "🚫 SHARING DETECTED!", 
+            f"**Key:** `{key}` ({k['tier']})\n"
+            f"**Original IP:** {k['first_ip']}\n"
+            f"**New IP:** {client_ip}\n"
+            f"**Original HWID:** `{k['hwid'][:12]}...`\n"
+            f"**New HWID:** `{hwid[:12]}...`\n\n"
+            f"**Status:** BANNED AUTOMATICALLY",
+            color=0xFF0000
+        )
+        
         return jsonify({
             "status": "banned",
             "message": "SHARING DETECTED. Contact support in discord."
@@ -373,16 +417,34 @@ def activate():
         k["banned"] = True
         k["ban_reason"] = "IP_CHANGE"
         save_keys()
+        
+        # 🌐 Желтое уведомление о смене IP
+        send_discord_alert(
+            "🌐 IP Change Detected", 
+            f"**Key:** `{key}` ({k['tier']})\n"
+            f"**Old IP:** {k['first_ip']}\n"
+            f"**New IP:** {client_ip}\n\n"
+            f"**Status:** BANNED FOR SECURITY",
+            color=0xFFFF00
+        )
+        
         return jsonify({
             "status": "banned",
             "message": "IP CHANGE DETECTED. Key banned for security. Contact support."
         })
     
-    # Всё ок
+    # Всё ок - легитимный вход
     exp_ts = 0
     if k.get("expires_at"):
         try: exp_ts = int(datetime.fromisoformat(k["expires_at"]).timestamp())
         except: pass
+        
+    # 🔵 Синее уведомление об обычном входе
+    send_discord_alert(
+        "🔑 Successful Login", 
+        f"**Key:** `{key}` ({k['tier']})\n**IP:** {client_ip}\n**HWID:** `{hwid[:12]}...`",
+        color=0x0088FF
+    )
         
     return jsonify({"status": "ok", "tier": k["tier"], "expires_at": exp_ts})
 
@@ -405,7 +467,7 @@ def admin_keys():
         
         stats["total"] += 1
         if data["banned"] and data.get("ban_reason") == "SHARING": stats["sharing"] += 1
-        elif data["banned"]: pass # другие баны считаем отдельно если нужно
+        elif data["banned"]: pass 
         elif data["used"]: stats["active"] += 1
         else: stats["unused"] += 1
         
