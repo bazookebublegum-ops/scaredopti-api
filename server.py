@@ -98,13 +98,13 @@ if not keys:
         keys[key] = {
             "used": False, "tier": tier, "hwid": None, 
             "first_ip": None, "activated_at": None, 
-            "expires_at": None, "banned": False
+            "expires_at": None, "banned": False, "ban_reason": None
         }
     save_keys()
     print(f"[OK] Initialized {len(keys)} keys")
 
 # ═══════════════════════════════════════════════
-# 🎨 АДМИНКА С 3 ПЛАШКАМИ И СОРТИРОВКОЙ
+# 🎨 АДМИНКА С ВИЗУАЛИЗАЦИЕЙ СТАТУСОВ
 # ═══════════════════════════════════════════════
 ADMIN_HTML = """
 <!DOCTYPE html>
@@ -113,7 +113,7 @@ ADMIN_HTML = """
     <meta charset="UTF-8">
     <title>Scared Opti Admin</title>
     <style>
-        :root { --bg: #000; --surface: #0a0a0a; --border: #1a1a1a; --text: #fff; --muted: #666; --danger: #ff0000; --success: #00ff00; --gold: #ffd700; }
+        :root { --bg: #000; --surface: #0a0a0a; --border: #1a1a1a; --text: #fff; --muted: #666; --danger: #ff0000; --success: #00ff00; --warning: #ffd700; }
         * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Courier New', monospace; }
         body { background: var(--bg); color: var(--text); padding: 40px; min-height: 100vh; }
         .container { max-width: 1200px; margin: 0 auto; }
@@ -121,23 +121,10 @@ ADMIN_HTML = """
         header { border-bottom: 1px solid var(--border); padding-bottom: 20px; margin-bottom: 40px; display: flex; justify-content: space-between; align-items: center; }
         h1 { font-size: 24px; font-weight: normal; letter-spacing: 2px; text-transform: uppercase; }
         
-        /* 3 СПЕЦИАЛЬНЫЕ ПЛАШКИ */
-        .tier-cards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; margin-bottom: 40px; }
-        .tier-card { background: var(--surface); border: 1px solid var(--border); padding: 24px; position: relative; overflow: hidden; }
-        .tier-card::before { content:''; position:absolute; top:0; left:0; right:0; height:2px; }
-        .tier-card.basic::before { background: #444; }
-        .tier-card.premium::before { background: var(--gold); }
-        .tier-card.owner::before { background: var(--danger); }
-        
-        .tier-label { font-size: 10px; color: var(--muted); text-transform: uppercase; margin-bottom: 12px; letter-spacing: 1px; }
-        .tier-count { font-size: 36px; font-weight: bold; margin-bottom: 8px; }
-        .tier-sub { font-size: 11px; color: var(--muted); }
-        .tier-sub span { color: var(--text); }
-        
-        .tabs { display: flex; gap: 10px; margin-bottom: 20px; border-bottom: 1px solid var(--border); }
-        .tab { padding: 10px 20px; cursor: pointer; color: var(--muted); text-transform: uppercase; font-size: 12px; border-bottom: 2px solid transparent; transition: all 0.2s; }
-        .tab:hover { color: var(--text); }
-        .tab.active { color: var(--text); border-bottom-color: var(--text); }
+        .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 20px; margin-bottom: 40px; }
+        .stat { background: var(--surface); border: 1px solid var(--border); padding: 20px; }
+        .stat-label { font-size: 10px; color: var(--muted); text-transform: uppercase; margin-bottom: 8px; }
+        .stat-value { font-size: 28px; font-weight: bold; }
         
         .add-form { display: flex; gap: 10px; margin-bottom: 40px; }
         input, select, button { background: var(--surface); border: 1px solid var(--border); color: var(--text); padding: 12px 16px; font-family: inherit; font-size: 12px; outline: none; }
@@ -153,11 +140,13 @@ ADMIN_HTML = """
         
         .badge { padding: 2px 8px; font-size: 10px; text-transform: uppercase; border: 1px solid; }
         .badge-basic { border-color: #444; color: #888; }
-        .badge-premium { border-color: var(--gold); color: var(--gold); }
+        .badge-premium { border-color: var(--warning); color: var(--warning); }
         .badge-owner { border-color: var(--danger); color: var(--danger); }
         
-        .status-active { color: var(--success); }
-        .status-banned { color: var(--danger); font-weight: bold; }
+        .status-active { color: var(--success); font-weight: bold; }
+        .status-sharing { color: var(--danger); font-weight: bold; text-decoration: underline; }
+        .status-ipchange { color: var(--warning); font-weight: bold; }
+        .status-banned { color: #ff4444; }
         .status-unused { color: var(--muted); }
         
         .actions { display: flex; gap: 8px; }
@@ -172,31 +161,14 @@ ADMIN_HTML = """
     <div class="container">
         <header>
             <h1>Scared Opti // Admin</h1>
-            <div style="font-size: 10px; color: var(--muted);">v2.2 TIER CARDS</div>
+            <div style="font-size: 10px; color: var(--muted);">v2.3 STATUS TRACKING</div>
         </header>
         
-        <!-- 3 СПЕЦИАЛЬНЫЕ ПЛАШКИ -->
-        <div class="tier-cards">
-            <div class="tier-card basic">
-                <div class="tier-label">Basic Keys</div>
-                <div class="tier-count" id="basicCount">0</div>
-                <div class="tier-sub"><span id="basicUsed">0</span> used / <span id="basicTotal">0</span> total</div>
-            </div>
-            <div class="tier-card premium">
-                <div class="tier-label">Premium Keys</div>
-                <div class="tier-count" id="premCount">0</div>
-                <div class="tier-sub"><span id="premUsed">0</span> used / <span id="premTotal">0</span> total</div>
-            </div>
-            <div class="tier-card owner">
-                <div class="tier-label">Owner Keys</div>
-                <div class="tier-count" id="ownerCount">0</div>
-                <div class="tier-sub"><span id="ownerUsed">0</span> used / <span id="ownerTotal">0</span> total</div>
-            </div>
-        </div>
-        
-        <div class="tabs">
-            <div class="tab active" onclick="switchTab('all')" id="tab-all">All Keys</div>
-            <div class="tab" onclick="switchTab('used')" id="tab-used">Used Keys</div>
+        <div class="stats">
+            <div class="stat"><div class="stat-label">Total Keys</div><div class="stat-value" id="total">0</div></div>
+            <div class="stat"><div class="stat-label">Active</div><div class="stat-value" id="active">0</div></div>
+            <div class="stat"><div class="stat-label">Sharing Ban</div><div class="stat-value" id="sharing" style="color:var(--danger)">0</div></div>
+            <div class="stat"><div class="stat-label">Unused</div><div class="stat-value" id="unused">0</div></div>
         </div>
         
         <div class="add-form">
@@ -234,34 +206,11 @@ ADMIN_HTML = """
             const data = await res.json();
             allKeysData = data.keys;
             
-            // Обновляем 3 специальные плашки
-            const tiers = { BASIC: {total:0, used:0}, PREMIUM: {total:0, used:0}, OWNER: {total:0, used:0} };
-            data.keys.forEach(k => {
-                if(tiers[k.tier]) {
-                    tiers[k.tier].total++;
-                    if(k.used) tiers[k.tier].used++;
-                }
-            });
+            document.getElementById('total').textContent = data.stats.total;
+            document.getElementById('active').textContent = data.stats.active;
+            document.getElementById('sharing').textContent = data.stats.sharing;
+            document.getElementById('unused').textContent = data.stats.unused;
             
-            document.getElementById('basicTotal').textContent = tiers.BASIC.total;
-            document.getElementById('basicUsed').textContent = tiers.BASIC.used;
-            document.getElementById('basicCount').textContent = tiers.BASIC.total - tiers.BASIC.used;
-            
-            document.getElementById('premTotal').textContent = tiers.PREMIUM.total;
-            document.getElementById('premUsed').textContent = tiers.PREMIUM.used;
-            document.getElementById('premCount').textContent = tiers.PREMIUM.total - tiers.PREMIUM.used;
-            
-            document.getElementById('ownerTotal').textContent = tiers.OWNER.total;
-            document.getElementById('ownerUsed').textContent = tiers.OWNER.used;
-            document.getElementById('ownerCount').textContent = tiers.OWNER.total - tiers.OWNER.used;
-            
-            renderTable();
-        }
-        
-        function switchTab(tab) {
-            currentTab = tab;
-            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-            document.getElementById(`tab-${tab}`).classList.add('active');
             renderTable();
         }
         
@@ -275,17 +224,34 @@ ADMIN_HTML = """
             renderTable();
         }
         
+        function getStatusDisplay(k) {
+            if (!k.used && !k.banned) return '<span class="status-unused">UNUSED</span>';
+            if (k.banned && k.ban_reason === 'SHARING') return '<span class="status-sharing">🚫 SHARING</span>';
+            if (k.banned && k.ban_reason === 'IP_CHANGE') return '<span class="status-ipchange">🌐 IP CHANGE</span>';
+            if (k.banned) return '<span class="status-banned">⛔ BANNED</span>';
+            return '<span class="status-active">✅ ACTIVE</span>';
+        }
+
+        function getSortValue(k) {
+            if (!k.used && !k.banned) return 0;
+            if (k.banned && k.ban_reason === 'SHARING') return 3;
+            if (k.banned && k.ban_reason === 'IP_CHANGE') return 2;
+            if (k.banned) return 1;
+            return 4;
+        }
+        
         function renderTable() {
-            let filtered = currentTab === 'used' ? allKeysData.filter(k => k.used) : allKeysData;
+            let filtered = allKeysData;
             
             filtered.sort((a, b) => {
+                if (sortField === 'status') {
+                    let valA = getSortValue(a);
+                    let valB = getSortValue(b);
+                    return sortAsc ? valA - valB : valB - valA;
+                }
+                
                 let valA = a[sortField] || '';
                 let valB = b[sortField] || '';
-                
-                if (sortField === 'status') {
-                    valA = a.banned ? 2 : (a.used ? 1 : 0);
-                    valB = b.banned ? 2 : (b.used ? 1 : 0);
-                }
                 
                 if (valA < valB) return sortAsc ? -1 : 1;
                 if (valA > valB) return sortAsc ? 1 : -1;
@@ -293,12 +259,10 @@ ADMIN_HTML = """
             });
             
             document.getElementById('keysTable').innerHTML = filtered.map(k => `
-                <tr style="${k.banned ? 'opacity:0.5' : ''}">
+                <tr style="${k.banned ? 'opacity:0.6' : ''}">
                     <td style="font-family:monospace">${k.key}</td>
                     <td><span class="badge badge-${k.tier.toLowerCase()}">${k.tier}</span></td>
-                    <td class="${k.banned ? 'status-banned' : (k.used ? 'status-active' : 'status-unused')}">
-                        ${k.banned ? 'BANNED' : (k.used ? 'ACTIVE' : 'UNUSED')}
-                    </td>
+                    <td>${getStatusDisplay(k)}</td>
                     <td style="color:var(--muted); font-size:10px;">
                         ${k.hwid ? k.hwid.substring(0,12)+'...' : '-'}<br>
                         ${k.first_ip || '-'}
@@ -323,9 +287,20 @@ ADMIN_HTML = """
             load();
         }
         
-        async function ban(key) { await fetch('/api/admin/ban', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({key})}); load(); }
-        async function unban(key) { await fetch('/api/admin/unban', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({key})}); load(); }
-        async function del(key) { if(confirm('Delete '+key+'?')) { await fetch('/api/admin/delete', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({key})}); load(); } }
+        async function ban(key) { 
+            await fetch('/api/admin/ban', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({key, reason: 'MANUAL'})}); 
+            load(); 
+        }
+        async function unban(key) { 
+            await fetch('/api/admin/unban', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({key})}); 
+            load(); 
+        }
+        async function del(key) { 
+            if(confirm('Delete '+key+'?')) { 
+                await fetch('/api/admin/delete', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({key})}); 
+                load(); 
+            } 
+        }
         
         load();
         setInterval(load, 5000);
@@ -350,27 +325,60 @@ def activate():
     
     k = keys[key]
     
+    # 1. ПРОВЕРКА НА УЖЕ ЗАБАНЕННЫЙ КЛЮЧ
     if k.get("banned"):
-        return jsonify({"status": "banned", "message": "SHARING DETECTED. Contact support in discord."})
+        return jsonify({
+            "status": "banned",
+            "message": f"KEY BANNED ({k.get('ban_reason', 'UNKNOWN')}). Contact support."
+        })
     
+    # 2. ПРОВЕРКА СРОКА ДЕЙСТВИЯ
     if k.get("expires_at"):
         try:
             if datetime.now() > datetime.fromisoformat(k["expires_at"]):
                 return jsonify({"status": "expired", "message": "License expired"})
         except: pass
     
+    # 3. ПЕРВАЯ АКТИВАЦИЯ
     if not k["used"]:
         now = datetime.now()
         expires = now + timedelta(days=BETA_DURATION_DAYS)
-        k.update({"used": True, "hwid": hwid, "first_ip": client_ip, "activated_at": now.isoformat(), "expires_at": expires.isoformat()})
+        k.update({
+            "used": True,
+            "hwid": hwid,
+            "first_ip": client_ip,
+            "activated_at": now.isoformat(),
+            "expires_at": expires.isoformat(),
+            "banned": False,
+            "ban_reason": None
+        })
         save_keys()
-        return jsonify({"status": "ok", "tier": k["tier"], "expires_at": int(expires.timestamp())})
+        return jsonify({
+            "status": "ok",
+            "tier": k["tier"],
+            "expires_at": int(expires.timestamp())
+        })
     
+    # 4. ЖЕСТКАЯ ПРОВЕРКА ШЕРИНГА И IP
     if k["hwid"] != hwid:
         k["banned"] = True
+        k["ban_reason"] = "SHARING"
         save_keys()
-        return jsonify({"status": "banned", "message": "SHARING DETECTED. Contact support in discord."})
+        return jsonify({
+            "status": "banned",
+            "message": "SHARING DETECTED. Contact support in discord."
+        })
+        
+    if k["first_ip"] != client_ip:
+        k["banned"] = True
+        k["ban_reason"] = "IP_CHANGE"
+        save_keys()
+        return jsonify({
+            "status": "banned",
+            "message": "IP CHANGE DETECTED. Key banned for security. Contact support."
+        })
     
+    # Всё ок
     exp_ts = 0
     if k.get("expires_at"):
         try: exp_ts = int(datetime.fromisoformat(k["expires_at"]).timestamp())
@@ -378,31 +386,59 @@ def activate():
         
     return jsonify({"status": "ok", "tier": k["tier"], "expires_at": exp_ts})
 
+# ═══════════════════════════════════════════════
+# 🔧 АДМИН API
+# ═══════════════════════════════════════════════
+
 @app.route("/api/admin/keys")
 def admin_keys():
+    stats = {"total": 0, "active": 0, "sharing": 0, "unused": 0}
     keys_list = []
+    
     for key, data in keys.items():
-        keys_list.append({"key": key, "tier": data["tier"], "used": data["used"], "hwid": data["hwid"], "first_ip": data["first_ip"], "activated_at": data["activated_at"], "banned": data["banned"]})
-    return jsonify({"keys": keys_list})
+        keys_list.append({
+            "key": key, "tier": data["tier"], "used": data["used"],
+            "hwid": data["hwid"], "first_ip": data["first_ip"],
+            "activated_at": data["activated_at"], 
+            "banned": data["banned"], "ban_reason": data.get("ban_reason")
+        })
+        
+        stats["total"] += 1
+        if data["banned"] and data.get("ban_reason") == "SHARING": stats["sharing"] += 1
+        elif data["banned"]: pass # другие баны считаем отдельно если нужно
+        elif data["used"]: stats["active"] += 1
+        else: stats["unused"] += 1
+        
+    return jsonify({"keys": keys_list, "stats": stats})
 
 @app.route("/api/admin/add", methods=["POST"])
 def admin_add():
     d = request.json
     if d["key"] in keys: return jsonify({"status": "error"})
-    keys[d["key"]] = {"used":False,"tier":d["tier"],"hwid":None,"first_ip":None,"activated_at":None,"expires_at":None,"banned":False}
+    keys[d["key"]] = {
+        "used":False,"tier":d["tier"],"hwid":None,"first_ip":None,
+        "activated_at":None,"expires_at":None,"banned":False,"ban_reason":None
+    }
     save_keys()
     return jsonify({"status": "ok"})
 
 @app.route("/api/admin/ban", methods=["POST"])
 def admin_ban():
     k = request.json["key"]
-    if k in keys: keys[k]["banned"] = True; save_keys()
+    reason = request.json.get("reason", "MANUAL")
+    if k in keys: 
+        keys[k]["banned"] = True
+        keys[k]["ban_reason"] = reason
+        save_keys()
     return jsonify({"status": "ok"})
 
 @app.route("/api/admin/unban", methods=["POST"])
 def admin_unban():
     k = request.json["key"]
-    if k in keys: keys[k]["banned"] = False; save_keys()
+    if k in keys: 
+        keys[k]["banned"] = False
+        keys[k]["ban_reason"] = None
+        save_keys()
     return jsonify({"status": "ok"})
 
 @app.route("/api/admin/delete", methods=["POST"])
@@ -413,5 +449,5 @@ def admin_del():
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 10000))
-    print(f"🔐 Scared Opti Server v2.2 | Port: {port} | Keys: {len(keys)}")
+    print(f"🔐 Scared Opti Server v2.3 | Port: {port} | Keys: {len(keys)}")
     app.run(host="0.0.0.0", port=port, debug=False)
