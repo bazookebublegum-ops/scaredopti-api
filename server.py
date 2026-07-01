@@ -11,7 +11,6 @@ app = Flask(__name__)
 KEYS_FILE = "keys.json"
 BETA_DURATION_DAYS = 30
 
-# Полный список ключей
 ALL_KEYS_DATA = {
     # BASIC KEYS (60)
     "SCARED-BASIC-0GRF5A4M": "BASIC", "SCARED-BASIC-0MVAPYIX": "BASIC",
@@ -94,23 +93,18 @@ def save_keys():
 
 keys = load_keys()
 
-# Инициализация базы ключей при первом запуске
 if not keys:
     for key, tier in ALL_KEYS_DATA.items():
         keys[key] = {
-            "used": False,
-            "tier": tier,
-            "hwid": None,
-            "first_ip": None,
-            "activated_at": None,
-            "expires_at": None,
-            "banned": False
+            "used": False, "tier": tier, "hwid": None, 
+            "first_ip": None, "activated_at": None, 
+            "expires_at": None, "banned": False
         }
     save_keys()
     print(f"[OK] Initialized {len(keys)} keys")
 
 # ═══════════════════════════════════════════════
-# 🎨 ЧЕРНАЯ МИНИМАЛИСТИЧНАЯ АДМИНКА
+# 🎨 АДМИНКА С ВКЛАДКОЙ USED И СОРТИРОВКОЙ
 # ═══════════════════════════════════════════════
 ADMIN_HTML = """
 <!DOCTYPE html>
@@ -119,7 +113,7 @@ ADMIN_HTML = """
     <meta charset="UTF-8">
     <title>Scared Opti Admin</title>
     <style>
-        :root { --bg: #000; --surface: #0a0a0a; --border: #1a1a1a; --text: #fff; --muted: #666; --accent: #fff; --danger: #ff0000; --success: #00ff00; }
+        :root { --bg: #000; --surface: #0a0a0a; --border: #1a1a1a; --text: #fff; --muted: #666; --danger: #ff0000; --success: #00ff00; }
         * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Courier New', monospace; }
         body { background: var(--bg); color: var(--text); padding: 40px; min-height: 100vh; }
         .container { max-width: 1200px; margin: 0 auto; }
@@ -132,6 +126,11 @@ ADMIN_HTML = """
         .stat-label { font-size: 10px; color: var(--muted); text-transform: uppercase; margin-bottom: 8px; }
         .stat-value { font-size: 28px; font-weight: bold; }
         
+        .tabs { display: flex; gap: 10px; margin-bottom: 20px; border-bottom: 1px solid var(--border); }
+        .tab { padding: 10px 20px; cursor: pointer; color: var(--muted); text-transform: uppercase; font-size: 12px; border-bottom: 2px solid transparent; transition: all 0.2s; }
+        .tab:hover { color: var(--text); }
+        .tab.active { color: var(--text); border-bottom-color: var(--text); }
+        
         .add-form { display: flex; gap: 10px; margin-bottom: 40px; }
         input, select, button { background: var(--surface); border: 1px solid var(--border); color: var(--text); padding: 12px 16px; font-family: inherit; font-size: 12px; outline: none; }
         input { flex: 1; }
@@ -139,7 +138,8 @@ ADMIN_HTML = """
         button:hover { background: var(--text); color: var(--bg); }
         
         table { width: 100%; border-collapse: collapse; }
-        th { text-align: left; padding: 12px; border-bottom: 1px solid var(--border); font-size: 10px; color: var(--muted); text-transform: uppercase; font-weight: normal; }
+        th { text-align: left; padding: 12px; border-bottom: 1px solid var(--border); font-size: 10px; color: var(--muted); text-transform: uppercase; font-weight: normal; cursor: pointer; user-select: none; }
+        th:hover { color: var(--text); }
         td { padding: 16px 12px; border-bottom: 1px solid var(--border); font-size: 12px; }
         tr:hover { background: rgba(255,255,255,0.02); }
         
@@ -156,13 +156,15 @@ ADMIN_HTML = """
         .btn-sm { padding: 4px 12px; font-size: 10px; border: 1px solid var(--border); background: transparent; color: var(--muted); }
         .btn-sm:hover { background: var(--text); color: var(--bg); }
         .btn-danger:hover { background: var(--danger); color: #fff; border-color: var(--danger); }
+        
+        .sort-arrow { margin-left: 5px; font-size: 8px; }
     </style>
 </head>
 <body>
     <div class="container">
         <header>
             <h1>Scared Opti // Admin</h1>
-            <div style="font-size: 10px; color: var(--muted);">v2.0 SECURE</div>
+            <div style="font-size: 10px; color: var(--muted);">v2.1 SORTABLE</div>
         </header>
         
         <div class="stats">
@@ -170,6 +172,11 @@ ADMIN_HTML = """
             <div class="stat"><div class="stat-label">Active</div><div class="stat-value" id="active">0</div></div>
             <div class="stat"><div class="stat-label">Banned</div><div class="stat-value" id="banned" style="color:var(--danger)">0</div></div>
             <div class="stat"><div class="stat-label">Unused</div><div class="stat-value" id="unused">0</div></div>
+        </div>
+        
+        <div class="tabs">
+            <div class="tab active" onclick="switchTab('all')" id="tab-all">All Keys</div>
+            <div class="tab" onclick="switchTab('used')" id="tab-used">Used Keys</div>
         </div>
         
         <div class="add-form">
@@ -185,9 +192,9 @@ ADMIN_HTML = """
         <table>
             <thead>
                 <tr>
-                    <th>Key</th>
-                    <th>Tier</th>
-                    <th>Status</th>
+                    <th onclick="sortTable('key')">Key <span class="sort-arrow" id="arrow-key"></span></th>
+                    <th onclick="sortTable('tier')">Tier <span class="sort-arrow" id="arrow-tier"></span></th>
+                    <th onclick="sortTable('status')">Status <span class="sort-arrow" id="arrow-status"></span></th>
                     <th>HWID / IP</th>
                     <th>Actions</th>
                 </tr>
@@ -197,16 +204,59 @@ ADMIN_HTML = """
     </div>
 
     <script>
+        let currentTab = 'all';
+        let sortField = 'key';
+        let sortAsc = true;
+        let allKeysData = [];
+
         async function load() {
             const res = await fetch('/api/admin/keys');
             const data = await res.json();
+            allKeysData = data.keys;
             
             document.getElementById('total').textContent = data.stats.total;
             document.getElementById('active').textContent = data.stats.active;
             document.getElementById('banned').textContent = data.stats.banned;
             document.getElementById('unused').textContent = data.stats.unused;
             
-            document.getElementById('keysTable').innerHTML = data.keys.map(k => `
+            renderTable();
+        }
+        
+        function switchTab(tab) {
+            currentTab = tab;
+            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+            document.getElementById(`tab-${tab}`).classList.add('active');
+            renderTable();
+        }
+        
+        function sortTable(field) {
+            if (sortField === field) sortAsc = !sortAsc;
+            else { sortField = field; sortAsc = true; }
+            
+            document.querySelectorAll('.sort-arrow').forEach(a => a.textContent = '');
+            document.getElementById(`arrow-${field}`).textContent = sortAsc ? '▲' : '▼';
+            
+            renderTable();
+        }
+        
+        function renderTable() {
+            let filtered = currentTab === 'used' ? allKeysData.filter(k => k.used) : allKeysData;
+            
+            filtered.sort((a, b) => {
+                let valA = a[sortField] || '';
+                let valB = b[sortField] || '';
+                
+                if (sortField === 'status') {
+                    valA = a.banned ? 2 : (a.used ? 1 : 0);
+                    valB = b.banned ? 2 : (b.used ? 1 : 0);
+                }
+                
+                if (valA < valB) return sortAsc ? -1 : 1;
+                if (valA > valB) return sortAsc ? 1 : -1;
+                return 0;
+            });
+            
+            document.getElementById('keysTable').innerHTML = filtered.map(k => `
                 <tr style="${k.banned ? 'opacity:0.5' : ''}">
                     <td style="font-family:monospace">${k.key}</td>
                     <td><span class="badge badge-${k.tier.toLowerCase()}">${k.tier}</span></td>
@@ -248,17 +298,12 @@ ADMIN_HTML = """
 </html>
 """
 
-# ═══════════════════════════════════════════════
-# 🌐 API МАРШРУТЫ
-# ═══════════════════════════════════════════════
-
 @app.route("/")
 def home():
     return render_template_string(ADMIN_HTML)
 
 @app.route("/activate", methods=["POST"])
 def activate():
-    """API активации с защитой от шаринга и киком сессии"""
     data = request.json
     key = data.get("key", "").strip().upper()
     hwid = data.get("hwid", "").strip()
@@ -269,51 +314,27 @@ def activate():
     
     k = keys[key]
     
-    # 1. ПРОВЕРКА НА БАН (КИК СЕССИИ)
     if k.get("banned"):
-        return jsonify({
-            "status": "banned",
-            "message": "SHARING DETECTED. Contact support in discord."
-        })
+        return jsonify({"status": "banned", "message": "SHARING DETECTED. Contact support in discord."})
     
-    # 2. ПРОВЕРКА СРОКА ДЕЙСТВИЯ
     if k.get("expires_at"):
         try:
             if datetime.now() > datetime.fromisoformat(k["expires_at"]):
                 return jsonify({"status": "expired", "message": "License expired"})
         except: pass
     
-    # 3. ПЕРВАЯ АКТИВАЦИЯ
     if not k["used"]:
         now = datetime.now()
         expires = now + timedelta(days=BETA_DURATION_DAYS)
-        
-        k.update({
-            "used": True,
-            "hwid": hwid,
-            "first_ip": client_ip,
-            "activated_at": now.isoformat(),
-            "expires_at": expires.isoformat()
-        })
+        k.update({"used": True, "hwid": hwid, "first_ip": client_ip, "activated_at": now.isoformat(), "expires_at": expires.isoformat()})
         save_keys()
-        
-        return jsonify({
-            "status": "ok",
-            "tier": k["tier"],
-            "expires_at": int(expires.timestamp())
-        })
+        return jsonify({"status": "ok", "tier": k["tier"], "expires_at": int(expires.timestamp())})
     
-    # 4. ПОВТОРНАЯ ПРОВЕРКА (ЗАЩИТА ОТ ШАРИНГА)
-    # Если HWID отличается - это 100% шаринг
     if k["hwid"] != hwid:
         k["banned"] = True
         save_keys()
-        return jsonify({
-            "status": "banned",
-            "message": "SHARING DETECTED. Contact support in discord."
-        })
+        return jsonify({"status": "banned", "message": "SHARING DETECTED. Contact support in discord."})
     
-    # Всё ок
     exp_ts = 0
     if k.get("expires_at"):
         try: exp_ts = int(datetime.fromisoformat(k["expires_at"]).timestamp())
@@ -321,26 +342,16 @@ def activate():
         
     return jsonify({"status": "ok", "tier": k["tier"], "expires_at": exp_ts})
 
-# ═══════════════════════════════════════════════
-# 🔧 АДМИН API
-# ═══════════════════════════════════════════════
-
 @app.route("/api/admin/keys")
 def admin_keys():
     stats = {"total": 0, "active": 0, "banned": 0, "unused": 0}
     keys_list = []
-    
     for key, data in keys.items():
-        keys_list.append({
-            "key": key, "tier": data["tier"], "used": data["used"],
-            "hwid": data["hwid"], "first_ip": data["first_ip"],
-            "activated_at": data["activated_at"], "banned": data["banned"]
-        })
+        keys_list.append({"key": key, "tier": data["tier"], "used": data["used"], "hwid": data["hwid"], "first_ip": data["first_ip"], "activated_at": data["activated_at"], "banned": data["banned"]})
         stats["total"] += 1
         if data["banned"]: stats["banned"] += 1
         elif data["used"]: stats["active"] += 1
         else: stats["unused"] += 1
-        
     return jsonify({"keys": keys_list, "stats": stats})
 
 @app.route("/api/admin/add", methods=["POST"])
@@ -369,10 +380,7 @@ def admin_del():
     if k in keys: del keys[k]; save_keys()
     return jsonify({"status": "ok"})
 
-# ═══════════════════════════════════════════════
-# 🚀 ЗАПУСК
-# ═══════════════════════════════════════════════
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 10000))
-    print(f"🔐 Scared Opti Server v2.0 | Port: {port} | Keys: {len(keys)}")
+    print(f"🔐 Scared Opti Server v2.1 | Port: {port} | Keys: {len(keys)}")
     app.run(host="0.0.0.0", port=port, debug=False)
