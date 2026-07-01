@@ -6,14 +6,82 @@ from datetime import datetime, timedelta
 app = Flask(__name__)
 
 # ═══════════════════════════════════════════════
-# ⚙️ КОНФИГУРАЦИЯ
+# ⚙️ КОНФИГУРАЦИЯ И КЛЮЧИ
 # ═══════════════════════════════════════════════
 KEYS_FILE = "keys.json"
 BETA_DURATION_DAYS = 30
 
-# ═══════════════════════════════════════════════
-# 🔑 БАЗА КЛЮЧЕЙ
-# ═══════════════════════════════════════════════
+# Полный список ключей
+ALL_KEYS_DATA = {
+    # BASIC KEYS (60)
+    "SCARED-BASIC-0GRF5A4M": "BASIC", "SCARED-BASIC-0MVAPYIX": "BASIC",
+    "SCARED-BASIC-0P55CST0": "BASIC", "SCARED-BASIC-0UPJ6X4H": "BASIC",
+    "SCARED-BASIC-16FYFTFQ": "BASIC", "SCARED-BASIC-1KX1H92I": "BASIC",
+    "SCARED-BASIC-39VA4A62": "BASIC", "SCARED-BASIC-3DRANVCN": "BASIC",
+    "SCARED-BASIC-53AF32WY": "BASIC", "SCARED-BASIC-5TCSMO0W": "BASIC",
+    "SCARED-BASIC-5ZX65IFA": "BASIC", "SCARED-BASIC-7BY9KLBA": "BASIC",
+    "SCARED-BASIC-7F969OL7": "BASIC", "SCARED-BASIC-7GIU1GUY": "BASIC",
+    "SCARED-BASIC-7TWIKDSV": "BASIC", "SCARED-BASIC-88050UMG": "BASIC",
+    "SCARED-BASIC-8I0L9S1Y": "BASIC", "SCARED-BASIC-B6U9UEJF": "BASIC",
+    "SCARED-BASIC-B99CKJZ0": "BASIC", "SCARED-BASIC-CAU78JM9": "BASIC",
+    "SCARED-BASIC-CERGLLHO": "BASIC", "SCARED-BASIC-ED1AYH81": "BASIC",
+    "SCARED-BASIC-EXFSSLHB": "BASIC", "SCARED-BASIC-EXGIMMN3": "BASIC",
+    "SCARED-BASIC-FJSNY16U": "BASIC", "SCARED-BASIC-G2SJ4AVQ": "BASIC",
+    "SCARED-BASIC-G94PU2YO": "BASIC", "SCARED-BASIC-GYLFJYWQ": "BASIC",
+    "SCARED-BASIC-HG9LJYEW": "BASIC", "SCARED-BASIC-HO4I7JRF": "BASIC",
+    "SCARED-BASIC-HYKMDOZE": "BASIC", "SCARED-BASIC-I0YY22MP": "BASIC",
+    "SCARED-BASIC-I2KKGZ7Y": "BASIC", "SCARED-BASIC-IDU3649G": "BASIC",
+    "SCARED-BASIC-IEAR3TKM": "BASIC", "SCARED-BASIC-JAP4LKQ7": "BASIC",
+    "SCARED-BASIC-LGWYVT61": "BASIC", "SCARED-BASIC-MHU0TIHC": "BASIC",
+    "SCARED-BASIC-MRJNU1PJ": "BASIC", "SCARED-BASIC-N5YCZ0G2": "BASIC",
+    "SCARED-BASIC-NHQ0K4N7": "BASIC", "SCARED-BASIC-O4TGRRZ6": "BASIC",
+    "SCARED-BASIC-O6GV9ZJ1": "BASIC", "SCARED-BASIC-P3MQPS3O": "BASIC",
+    "SCARED-BASIC-PMZJME7A": "BASIC", "SCARED-BASIC-Q0XE3ZJL": "BASIC",
+    "SCARED-BASIC-Q60ORSWJ": "BASIC", "SCARED-BASIC-SIY657E3": "BASIC",
+    "SCARED-BASIC-SLSRV5EV": "BASIC", "SCARED-BASIC-SPHHRT5Z": "BASIC",
+    "SCARED-BASIC-TB1YJ3KV": "BASIC", "SCARED-BASIC-TFVVX548": "BASIC",
+    "SCARED-BASIC-U6GB3KOY": "BASIC", "SCARED-BASIC-V5Z15U46": "BASIC",
+    "SCARED-BASIC-V9RPP3FY": "BASIC", "SCARED-BASIC-VV7IP3O1": "BASIC",
+    "SCARED-BASIC-XLZQDCKM": "BASIC", "SCARED-BASIC-Z9Q2FXE7": "BASIC",
+    "SCARED-BASIC-ZIMZNHJR": "BASIC", "SCARED-BASIC-ZT0JRIYO": "BASIC",
+    
+    # PREMIUM KEYS (60)
+    "SCARED-PREM-01LEM9O1": "PREMIUM", "SCARED-PREM-0FBM2MPP": "PREMIUM",
+    "SCARED-PREM-107RQOJ1": "PREMIUM", "SCARED-PREM-10LN3WBH": "PREMIUM",
+    "SCARED-PREM-1CKMM6R7": "PREMIUM", "SCARED-PREM-1MZIFYIK": "PREMIUM",
+    "SCARED-PREM-3027OZNN": "PREMIUM", "SCARED-PREM-329P0GOA": "PREMIUM",
+    "SCARED-PREM-3PSYL9FS": "PREMIUM", "SCARED-PREM-40YBBXCE": "PREMIUM",
+    "SCARED-PREM-46XTOAMS": "PREMIUM", "SCARED-PREM-4BZPTGJ3": "PREMIUM",
+    "SCARED-PREM-4J9L0ARQ": "PREMIUM", "SCARED-PREM-53HEFPAW": "PREMIUM",
+    "SCARED-PREM-6BVERWWU": "PREMIUM", "SCARED-PREM-6HKXW9S3": "PREMIUM",
+    "SCARED-PREM-7C9OBUS0": "PREMIUM", "SCARED-PREM-AFGB3VQI": "PREMIUM",
+    "SCARED-PREM-AHAA21MF": "PREMIUM", "SCARED-PREM-AJH2HHRE": "PREMIUM",
+    "SCARED-PREM-CT055VX9": "PREMIUM", "SCARED-PREM-EGGURNEY": "PREMIUM",
+    "SCARED-PREM-F38KD12Z": "PREMIUM", "SCARED-PREM-F7U9VNZF": "PREMIUM",
+    "SCARED-PREM-G3HJ1UBF": "PREMIUM", "SCARED-PREM-IIHRFPQV": "PREMIUM",
+    "SCARED-PREM-JG6G8V42": "PREMIUM", "SCARED-PREM-JNCWF97A": "PREMIUM",
+    "SCARED-PREM-K3SP5MWO": "PREMIUM", "SCARED-PREM-KEN8FDS8": "PREMIUM",
+    "SCARED-PREM-KGVM7TBN": "PREMIUM", "SCARED-PREM-KJY3WDUE": "PREMIUM",
+    "SCARED-PREM-KO68N7SD": "PREMIUM", "SCARED-PREM-LL2M2Q5C": "PREMIUM",
+    "SCARED-PREM-M8Y7FF8O": "PREMIUM", "SCARED-PREM-OE53FDZ9": "PREMIUM",
+    "SCARED-PREM-QSI9HVC5": "PREMIUM", "SCARED-PREM-QU6VA5BJ": "PREMIUM",
+    "SCARED-PREM-SZANYS01": "PREMIUM", "SCARED-PREM-TGRWR6TF": "PREMIUM",
+    "SCARED-PREM-THPZLWMV": "PREMIUM", "SCARED-PREM-U5VXE1KR": "PREMIUM",
+    "SCARED-PREM-UPFODCFH": "PREMIUM", "SCARED-PREM-VASUPEW2": "PREMIUM",
+    "SCARED-PREM-VSKC4FV4": "PREMIUM", "SCARED-PREM-VUJBV74K": "PREMIUM",
+    "SCARED-PREM-VXECK2LR": "PREMIUM", "SCARED-PREM-W2JPAW11": "PREMIUM",
+    "SCARED-PREM-WLJOV9NV": "PREMIUM", "SCARED-PREM-X1L9H8TS": "PREMIUM",
+    "SCARED-PREM-XC27B7YC": "PREMIUM", "SCARED-PREM-XEG1S1OD": "PREMIUM",
+    "SCARED-PREM-XMT2J7HZ": "PREMIUM", "SCARED-PREM-XOZ3WSIU": "PREMIUM",
+    "SCARED-PREM-XWQ28MKC": "PREMIUM", "SCARED-PREM-YB2JXI6A": "PREMIUM",
+    "SCARED-PREM-YJUMV7LT": "PREMIUM", "SCARED-PREM-YO2EMVKN": "PREMIUM",
+    "SCARED-PREM-ZR3SGYI0": "PREMIUM", "SCARED-PREM-ZUVBT0RX": "PREMIUM",
+    
+    # OWNER KEYS (4)
+    "SCARED-OWNER-GODMODE": "OWNER", "SCARED-OWNER-ALPHA01": "OWNER",
+    "SCARED-OWNER-BETA002": "OWNER", "SCARED-OWNER-DELTA03": "OWNER"
+}
+
 def load_keys():
     if os.path.exists(KEYS_FILE):
         with open(KEYS_FILE, 'r') as f:
@@ -24,678 +92,287 @@ def save_keys():
     with open(KEYS_FILE, 'w') as f:
         json.dump(keys, f, indent=2)
 
-# Загружаем ключи при старте
 keys = load_keys()
 
-# Если база пустая - добавляем тестовые ключи
+# Инициализация базы ключей при первом запуске
 if not keys:
-    keys = {
-        "SCARED-BASIC-TEST01": {
+    for key, tier in ALL_KEYS_DATA.items():
+        keys[key] = {
             "used": False,
-            "tier": "BASIC",
-            "hwid": None,
-            "first_ip": None,
-            "activated_at": None,
-            "expires_at": None,
-            "banned": False
-        },
-        "SCARED-PREM-TEST01": {
-            "used": False,
-            "tier": "PREMIUM",
+            "tier": tier,
             "hwid": None,
             "first_ip": None,
             "activated_at": None,
             "expires_at": None,
             "banned": False
         }
-    }
     save_keys()
+    print(f"[OK] Initialized {len(keys)} keys")
 
 # ═══════════════════════════════════════════════
-# 🎨 ИНТЕРФЕЙС АДМИНКИ
+# 🎨 ЧЕРНАЯ МИНИМАЛИСТИЧНАЯ АДМИНКА
 # ═══════════════════════════════════════════════
 ADMIN_HTML = """
 <!DOCTYPE html>
 <html lang="ru">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Scared Opti - Admin Panel</title>
+    <title>Scared Opti Admin</title>
     <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
+        :root { --bg: #000; --surface: #0a0a0a; --border: #1a1a1a; --text: #fff; --muted: #666; --accent: #fff; --danger: #ff0000; --success: #00ff00; }
+        * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Courier New', monospace; }
+        body { background: var(--bg); color: var(--text); padding: 40px; min-height: 100vh; }
+        .container { max-width: 1200px; margin: 0 auto; }
         
-        body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background: linear-gradient(135deg, #0a0a0f 0%, #1a1a2e 100%);
-            color: #fff;
-            min-height: 100vh;
-            padding: 20px;
-        }
+        header { border-bottom: 1px solid var(--border); padding-bottom: 20px; margin-bottom: 40px; display: flex; justify-content: space-between; align-items: center; }
+        h1 { font-size: 24px; font-weight: normal; letter-spacing: 2px; text-transform: uppercase; }
         
-        .container {
-            max-width: 1400px;
-            margin: 0 auto;
-        }
+        .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 20px; margin-bottom: 40px; }
+        .stat { background: var(--surface); border: 1px solid var(--border); padding: 20px; }
+        .stat-label { font-size: 10px; color: var(--muted); text-transform: uppercase; margin-bottom: 8px; }
+        .stat-value { font-size: 28px; font-weight: bold; }
         
-        header {
-            text-align: center;
-            margin-bottom: 40px;
-            padding: 30px;
-            background: rgba(22, 22, 35, 0.6);
-            border-radius: 16px;
-            backdrop-filter: blur(10px);
-            border: 1px solid rgba(255, 255, 255, 0.08);
-        }
+        .add-form { display: flex; gap: 10px; margin-bottom: 40px; }
+        input, select, button { background: var(--surface); border: 1px solid var(--border); color: var(--text); padding: 12px 16px; font-family: inherit; font-size: 12px; outline: none; }
+        input { flex: 1; }
+        button { cursor: pointer; text-transform: uppercase; transition: all 0.2s; }
+        button:hover { background: var(--text); color: var(--bg); }
         
-        h1 {
-            font-size: 36px;
-            background: linear-gradient(135deg, #7c5cff, #9d4eff);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            margin-bottom: 10px;
-        }
+        table { width: 100%; border-collapse: collapse; }
+        th { text-align: left; padding: 12px; border-bottom: 1px solid var(--border); font-size: 10px; color: var(--muted); text-transform: uppercase; font-weight: normal; }
+        td { padding: 16px 12px; border-bottom: 1px solid var(--border); font-size: 12px; }
+        tr:hover { background: rgba(255,255,255,0.02); }
         
-        .subtitle {
-            color: #888;
-            font-size: 14px;
-        }
+        .badge { padding: 2px 8px; font-size: 10px; text-transform: uppercase; border: 1px solid; }
+        .badge-basic { border-color: #444; color: #888; }
+        .badge-premium { border-color: #ffd700; color: #ffd700; }
+        .badge-owner { border-color: #ff0000; color: #ff0000; }
         
-        .stats {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-            gap: 20px;
-            margin-bottom: 40px;
-        }
+        .status-active { color: var(--success); }
+        .status-banned { color: var(--danger); font-weight: bold; }
+        .status-unused { color: var(--muted); }
         
-        .stat-card {
-            background: rgba(22, 22, 35, 0.6);
-            padding: 24px;
-            border-radius: 12px;
-            border: 1px solid rgba(255, 255, 255, 0.08);
-            backdrop-filter: blur(10px);
-            transition: all 0.3s;
-        }
-        
-        .stat-card:hover {
-            transform: translateY(-4px);
-            border-color: rgba(124, 92, 255, 0.3);
-            box-shadow: 0 8px 32px rgba(124, 92, 255, 0.2);
-        }
-        
-        .stat-label {
-            font-size: 12px;
-            color: #888;
-            text-transform: uppercase;
-            letter-spacing: 1px;
-            margin-bottom: 8px;
-        }
-        
-        .stat-value {
-            font-size: 32px;
-            font-weight: 700;
-            color: #7c5cff;
-        }
-        
-        .controls {
-            background: rgba(22, 22, 35, 0.6);
-            padding: 24px;
-            border-radius: 12px;
-            border: 1px solid rgba(255, 255, 255, 0.08);
-            margin-bottom: 30px;
-        }
-        
-        .btn {
-            padding: 12px 24px;
-            border: none;
-            border-radius: 8px;
-            font-size: 14px;
-            font-weight: 600;
-            cursor: pointer;
-            transition: all 0.3s;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-        }
-        
-        .btn-primary {
-            background: linear-gradient(135deg, #7c5cff, #9d4eff);
-            color: #fff;
-        }
-        
-        .btn-primary:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 8px 24px rgba(124, 92, 255, 0.4);
-        }
-        
-        .btn-danger {
-            background: rgba(255, 71, 87, 0.2);
-            color: #ff4757;
-            border: 1px solid #ff4757;
-        }
-        
-        .btn-danger:hover {
-            background: #ff4757;
-            color: #fff;
-        }
-        
-        .btn-success {
-            background: rgba(0, 214, 143, 0.2);
-            color: #00d68f;
-            border: 1px solid #00d68f;
-        }
-        
-        .btn-success:hover {
-            background: #00d68f;
-            color: #fff;
-        }
-        
-        .keys-list {
-            background: rgba(22, 22, 35, 0.6);
-            padding: 24px;
-            border-radius: 12px;
-            border: 1px solid rgba(255, 255, 255, 0.08);
-        }
-        
-        .key-item {
-            background: rgba(10, 10, 15, 0.6);
-            padding: 20px;
-            border-radius: 8px;
-            margin-bottom: 12px;
-            border: 1px solid rgba(255, 255, 255, 0.08);
-            transition: all 0.3s;
-        }
-        
-        .key-item:hover {
-            border-color: rgba(124, 92, 255, 0.3);
-        }
-        
-        .key-item.banned {
-            border-color: #ff4757;
-            background: rgba(255, 71, 87, 0.05);
-        }
-        
-        .key-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 12px;
-        }
-        
-        .key-code {
-            font-family: 'Courier New', monospace;
-            font-size: 16px;
-            font-weight: 600;
-            color: #7c5cff;
-        }
-        
-        .key-tier {
-            padding: 4px 12px;
-            border-radius: 6px;
-            font-size: 11px;
-            font-weight: 700;
-            text-transform: uppercase;
-        }
-        
-        .tier-basic {
-            background: rgba(74, 144, 226, 0.2);
-            color: #4a90e2;
-        }
-        
-        .tier-premium {
-            background: rgba(255, 215, 0, 0.2);
-            color: #ffd700;
-        }
-        
-        .tier-owner {
-            background: rgba(255, 42, 42, 0.2);
-            color: #ff2a2a;
-        }
-        
-        .key-info {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-            gap: 12px;
-            margin-bottom: 16px;
-            font-size: 13px;
-        }
-        
-        .info-item {
-            color: #888;
-        }
-        
-        .info-item strong {
-            color: #fff;
-        }
-        
-        .key-actions {
-            display: flex;
-            gap: 10px;
-        }
-        
-        .status-badge {
-            padding: 4px 12px;
-            border-radius: 6px;
-            font-size: 11px;
-            font-weight: 700;
-            text-transform: uppercase;
-        }
-        
-        .status-unused {
-            background: rgba(0, 214, 143, 0.2);
-            color: #00d68f;
-        }
-        
-        .status-used {
-            background: rgba(255, 165, 2, 0.2);
-            color: #ffa502;
-        }
-        
-        .status-banned {
-            background: rgba(255, 71, 87, 0.2);
-            color: #ff4757;
-        }
-        
-        .add-key-form {
-            display: flex;
-            gap: 12px;
-            margin-bottom: 20px;
-        }
-        
-        .add-key-form input, .add-key-form select {
-            padding: 12px;
-            border: 1px solid rgba(255, 255, 255, 0.08);
-            border-radius: 8px;
-            background: rgba(10, 10, 15, 0.6);
-            color: #fff;
-            font-size: 14px;
-        }
-        
-        .add-key-form input {
-            flex: 1;
-        }
-        
-        .add-key-form select {
-            min-width: 150px;
-        }
-        
-        .empty-state {
-            text-align: center;
-            padding: 60px 20px;
-            color: #888;
-        }
+        .actions { display: flex; gap: 8px; }
+        .btn-sm { padding: 4px 12px; font-size: 10px; border: 1px solid var(--border); background: transparent; color: var(--muted); }
+        .btn-sm:hover { background: var(--text); color: var(--bg); }
+        .btn-danger:hover { background: var(--danger); color: #fff; border-color: var(--danger); }
     </style>
 </head>
 <body>
     <div class="container">
         <header>
-            <h1>🔐 Scared Opti Admin Panel</h1>
-            <div class="subtitle">Управление лицензиями и защита от шаринга</div>
+            <h1>Scared Opti // Admin</h1>
+            <div style="font-size: 10px; color: var(--muted);">v2.0 SECURE</div>
         </header>
         
         <div class="stats">
-            <div class="stat-card">
-                <div class="stat-label">Всего ключей</div>
-                <div class="stat-value" id="totalKeys">0</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-label">Активных</div>
-                <div class="stat-value" id="activeKeys">0</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-label">Забанено</div>
-                <div class="stat-value" id="bannedKeys">0</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-label">Не использовано</div>
-                <div class="stat-value" id="unusedKeys">0</div>
-            </div>
+            <div class="stat"><div class="stat-label">Total Keys</div><div class="stat-value" id="total">0</div></div>
+            <div class="stat"><div class="stat-label">Active</div><div class="stat-value" id="active">0</div></div>
+            <div class="stat"><div class="stat-label">Banned</div><div class="stat-value" id="banned" style="color:var(--danger)">0</div></div>
+            <div class="stat"><div class="stat-label">Unused</div><div class="stat-value" id="unused">0</div></div>
         </div>
         
-        <div class="controls">
-            <h3 style="margin-bottom: 16px;">Добавить новый ключ</h3>
-            <div class="add-key-form">
-                <input type="text" id="newKey" placeholder="SCARED-BASIC-XXXXXXXX">
-                <select id="newTier">
-                    <option value="BASIC">BASIC</option>
-                    <option value="PREMIUM">PREMIUM</option>
-                    <option value="OWNER">OWNER</option>
-                </select>
-                <button class="btn btn-primary" onclick="addKey()">Добавить</button>
-            </div>
+        <div class="add-form">
+            <input type="text" id="newKey" placeholder="SCARED-TIER-XXXXXXXX">
+            <select id="newTier">
+                <option value="BASIC">BASIC</option>
+                <option value="PREMIUM">PREMIUM</option>
+                <option value="OWNER">OWNER</option>
+            </select>
+            <button onclick="addKey()">Add Key</button>
         </div>
         
-        <div class="keys-list">
-            <h3 style="margin-bottom: 20px;">Все ключи</h3>
-            <div id="keysContainer"></div>
-        </div>
+        <table>
+            <thead>
+                <tr>
+                    <th>Key</th>
+                    <th>Tier</th>
+                    <th>Status</th>
+                    <th>HWID / IP</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody id="keysTable"></tbody>
+        </table>
     </div>
 
     <script>
-        async function loadKeys() {
-            const response = await fetch('/api/admin/keys');
-            const data = await response.json();
+        async function load() {
+            const res = await fetch('/api/admin/keys');
+            const data = await res.json();
             
-            const container = document.getElementById('keysContainer');
+            document.getElementById('total').textContent = data.stats.total;
+            document.getElementById('active').textContent = data.stats.active;
+            document.getElementById('banned').textContent = data.stats.banned;
+            document.getElementById('unused').textContent = data.stats.unused;
             
-            if (data.keys.length === 0) {
-                container.innerHTML = '<div class="empty-state">Нет ключей. Добавьте первый ключ выше.</div>';
-                return;
-            }
-            
-            container.innerHTML = data.keys.map(key => `
-                <div class="key-item ${key.banned ? 'banned' : ''}">
-                    <div class="key-header">
-                        <div class="key-code">${key.key}</div>
-                        <div class="key-tier tier-${key.tier.toLowerCase()}">${key.tier}</div>
-                    </div>
-                    <div class="key-info">
-                        <div class="info-item">
-                            <strong>Статус:</strong> 
-                            <span class="status-badge status-${key.banned ? 'banned' : (key.used ? 'used' : 'unused')}">
-                                ${key.banned ? 'ЗАБАНЕН' : (key.used ? 'Использован' : 'Не использован')}
-                            </span>
-                        </div>
-                        ${key.used ? `
-                            <div class="info-item"><strong>HWID:</strong> ${key.hwid || 'N/A'}</div>
-                            <div class="info-item"><strong>IP:</strong> ${key.first_ip || 'N/A'}</div>
-                            <div class="info-item"><strong>Активирован:</strong> ${key.activated_at || 'N/A'}</div>
-                            <div class="info-item"><strong>Истекает:</strong> ${key.expires_at || 'N/A'}</div>
-                        ` : ''}
-                    </div>
-                    <div class="key-actions">
-                        ${key.banned ? 
-                            `<button class="btn btn-success" onclick="unbanKey('${key.key}')">Разбанить</button>` :
-                            `<button class="btn btn-danger" onclick="banKey('${key.key}')">Забанить</button>`
+            document.getElementById('keysTable').innerHTML = data.keys.map(k => `
+                <tr style="${k.banned ? 'opacity:0.5' : ''}">
+                    <td style="font-family:monospace">${k.key}</td>
+                    <td><span class="badge badge-${k.tier.toLowerCase()}">${k.tier}</span></td>
+                    <td class="${k.banned ? 'status-banned' : (k.used ? 'status-active' : 'status-unused')}">
+                        ${k.banned ? 'BANNED' : (k.used ? 'ACTIVE' : 'UNUSED')}
+                    </td>
+                    <td style="color:var(--muted); font-size:10px;">
+                        ${k.hwid ? k.hwid.substring(0,12)+'...' : '-'}<br>
+                        ${k.first_ip || '-'}
+                    </td>
+                    <td class="actions">
+                        ${k.banned 
+                            ? `<button class="btn-sm" onclick="unban('${k.key}')">Unban</button>` 
+                            : `<button class="btn-sm btn-danger" onclick="ban('${k.key}')">Ban</button>`
                         }
-                        <button class="btn btn-danger" onclick="deleteKey('${key.key}')">Удалить</button>
-                    </div>
-                </div>
+                        <button class="btn-sm btn-danger" onclick="del('${k.key}')">Del</button>
+                    </td>
+                </tr>
             `).join('');
-            
-            // Обновляем статистику
-            document.getElementById('totalKeys').textContent = data.stats.total;
-            document.getElementById('activeKeys').textContent = data.stats.active;
-            document.getElementById('bannedKeys').textContent = data.stats.banned;
-            document.getElementById('unusedKeys').textContent = data.stats.unused;
         }
         
         async function addKey() {
-            const key = document.getElementById('newKey').value.trim();
+            const key = document.getElementById('newKey').value.trim().toUpperCase();
             const tier = document.getElementById('newTier').value;
-            
-            if (!key) {
-                alert('Введите ключ!');
-                return;
-            }
-            
-            const response = await fetch('/api/admin/add', {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({key, tier})
-            });
-            
-            const data = await response.json();
-            
-            if (data.status === 'ok') {
-                document.getElementById('newKey').value = '';
-                loadKeys();
-            } else {
-                alert('Ошибка: ' + data.message);
-            }
+            if(!key) return;
+            await fetch('/api/admin/add', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({key,tier})});
+            document.getElementById('newKey').value = '';
+            load();
         }
         
-        async function banKey(key) {
-            if (!confirm(`Забанить ключ ${key}?`)) return;
-            
-            await fetch('/api/admin/ban', {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({key})
-            });
-            
-            loadKeys();
-        }
+        async function ban(key) { await fetch('/api/admin/ban', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({key})}); load(); }
+        async function unban(key) { await fetch('/api/admin/unban', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({key})}); load(); }
+        async function del(key) { if(confirm('Delete '+key+'?')) { await fetch('/api/admin/delete', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({key})}); load(); } }
         
-        async function unbanKey(key) {
-            if (!confirm(`Разбанить ключ ${key}?`)) return;
-            
-            await fetch('/api/admin/unban', {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({key})
-            });
-            
-            loadKeys();
-        }
-        
-        async function deleteKey(key) {
-            if (!confirm(`Удалить ключ ${key}? Это действие необратимо!`)) return;
-            
-            await fetch('/api/admin/delete', {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({key})
-            });
-            
-            loadKeys();
-        }
-        
-        // Загружаем ключи при старте
-        loadKeys();
-        
-        // Автообновление каждые 5 секунд
-        setInterval(loadKeys, 5000);
+        load();
+        setInterval(load, 5000);
     </script>
 </body>
 </html>
 """
 
 # ═══════════════════════════════════════════════
-# 🌐 МАРШРУТЫ
+# 🌐 API МАРШРУТЫ
 # ═══════════════════════════════════════════════
 
 @app.route("/")
 def home():
-    """Админ-панель"""
     return render_template_string(ADMIN_HTML)
 
 @app.route("/activate", methods=["POST"])
 def activate():
-    """API активации ключа с защитой от шаринга"""
+    """API активации с защитой от шаринга и киком сессии"""
     data = request.json
     key = data.get("key", "").strip().upper()
     hwid = data.get("hwid", "").strip()
     client_ip = request.remote_addr
     
-    if not key:
-        return jsonify({"status": "error", "message": "No key provided"})
+    if not key or key not in keys:
+        return jsonify({"status": "invalid", "message": "Invalid key"})
     
-    # Ключ не существует
-    if key not in keys:
-        return jsonify({"status": "invalid", "message": "Key not found"})
+    k = keys[key]
     
-    key_data = keys[key]
-    
-    # Ключ забанен
-    if key_data.get("banned", False):
+    # 1. ПРОВЕРКА НА БАН (КИК СЕССИИ)
+    if k.get("banned"):
         return jsonify({
             "status": "banned",
             "message": "SHARING DETECTED. Contact support in discord."
         })
     
-    # Проверка срока действия
-    if key_data.get("expires_at"):
+    # 2. ПРОВЕРКА СРОКА ДЕЙСТВИЯ
+    if k.get("expires_at"):
         try:
-            expires = datetime.fromisoformat(key_data["expires_at"])
-            if datetime.now() > expires:
+            if datetime.now() > datetime.fromisoformat(k["expires_at"]):
                 return jsonify({"status": "expired", "message": "License expired"})
-        except:
-            pass
+        except: pass
     
-    # Первый запуск - активируем
-    if not key_data["used"]:
-        key_data["used"] = True
-        key_data["hwid"] = hwid
-        key_data["first_ip"] = client_ip
-        key_data["activated_at"] = datetime.now().isoformat()
+    # 3. ПЕРВАЯ АКТИВАЦИЯ
+    if not k["used"]:
+        now = datetime.now()
+        expires = now + timedelta(days=BETA_DURATION_DAYS)
         
-        # Устанавливаем срок действия (30 дней для беты)
-        expires = datetime.now() + timedelta(days=BETA_DURATION_DAYS)
-        key_data["expires_at"] = expires.isoformat()
-        
+        k.update({
+            "used": True,
+            "hwid": hwid,
+            "first_ip": client_ip,
+            "activated_at": now.isoformat(),
+            "expires_at": expires.isoformat()
+        })
         save_keys()
         
         return jsonify({
             "status": "ok",
-            "tier": key_data["tier"],
+            "tier": k["tier"],
             "expires_at": int(expires.timestamp())
         })
     
-    # Уже использован - проверяем HWID и IP
-    if key_data["hwid"] != hwid:
-        # РАЗНЫЕ HWID - ЭТО ШАРИНГ!
-        key_data["banned"] = True
+    # 4. ПОВТОРНАЯ ПРОВЕРКА (ЗАЩИТА ОТ ШАРИНГА)
+    # Если HWID отличается - это 100% шаринг
+    if k["hwid"] != hwid:
+        k["banned"] = True
         save_keys()
-        
         return jsonify({
             "status": "banned",
             "message": "SHARING DETECTED. Contact support in discord."
         })
     
-    # Если IP изменился, но HWID тот же - это нормально (динамический IP)
-    # Но если хочешь жесткую привязку к IP - раскомментируй:
-    # if key_data["first_ip"] != client_ip:
-    #     key_data["banned"] = True
-    #     save_keys()
-    #     return jsonify({
-    #         "status": "banned",
-    #         "message": "SHARING DETECTED. Contact support in discord."
-    #     })
-    
-    # Всё ок - ключ валиден
-    expires_at = 0
-    if key_data.get("expires_at"):
-        try:
-            expires = datetime.fromisoformat(key_data["expires_at"])
-            expires_at = int(expires.timestamp())
-        except:
-            pass
-    
-    return jsonify({
-        "status": "ok",
-        "tier": key_data["tier"],
-        "expires_at": expires_at
-    })
+    # Всё ок
+    exp_ts = 0
+    if k.get("expires_at"):
+        try: exp_ts = int(datetime.fromisoformat(k["expires_at"]).timestamp())
+        except: pass
+        
+    return jsonify({"status": "ok", "tier": k["tier"], "expires_at": exp_ts})
 
 # ═══════════════════════════════════════════════
-# 🔧 API АДМИНКИ
+# 🔧 АДМИН API
 # ═══════════════════════════════════════════════
 
 @app.route("/api/admin/keys")
-def admin_get_keys():
-    """Получить все ключи для админки"""
-    keys_list = []
+def admin_keys():
     stats = {"total": 0, "active": 0, "banned": 0, "unused": 0}
+    keys_list = []
     
     for key, data in keys.items():
         keys_list.append({
-            "key": key,
-            "tier": data.get("tier", "BASIC"),
-            "used": data.get("used", False),
-            "hwid": data.get("hwid"),
-            "first_ip": data.get("first_ip"),
-            "activated_at": data.get("activated_at"),
-            "expires_at": data.get("expires_at"),
-            "banned": data.get("banned", False)
+            "key": key, "tier": data["tier"], "used": data["used"],
+            "hwid": data["hwid"], "first_ip": data["first_ip"],
+            "activated_at": data["activated_at"], "banned": data["banned"]
         })
-        
         stats["total"] += 1
-        if data.get("banned"):
-            stats["banned"] += 1
-        elif data.get("used"):
-            stats["active"] += 1
-        else:
-            stats["unused"] += 1
-    
+        if data["banned"]: stats["banned"] += 1
+        elif data["used"]: stats["active"] += 1
+        else: stats["unused"] += 1
+        
     return jsonify({"keys": keys_list, "stats": stats})
 
 @app.route("/api/admin/add", methods=["POST"])
-def admin_add_key():
-    """Добавить новый ключ"""
-    data = request.json
-    key = data.get("key", "").strip().upper()
-    tier = data.get("tier", "BASIC")
-    
-    if not key:
-        return jsonify({"status": "error", "message": "Key is required"})
-    
-    if key in keys:
-        return jsonify({"status": "error", "message": "Key already exists"})
-    
-    keys[key] = {
-        "used": False,
-        "tier": tier,
-        "hwid": None,
-        "first_ip": None,
-        "activated_at": None,
-        "expires_at": None,
-        "banned": False
-    }
-    
+def admin_add():
+    d = request.json
+    if d["key"] in keys: return jsonify({"status": "error"})
+    keys[d["key"]] = {"used":False,"tier":d["tier"],"hwid":None,"first_ip":None,"activated_at":None,"expires_at":None,"banned":False}
     save_keys()
-    return jsonify({"status": "ok", "message": "Key added"})
+    return jsonify({"status": "ok"})
 
 @app.route("/api/admin/ban", methods=["POST"])
-def admin_ban_key():
-    """Забанить ключ"""
-    data = request.json
-    key = data.get("key")
-    
-    if key in keys:
-        keys[key]["banned"] = True
-        save_keys()
-        return jsonify({"status": "ok"})
-    
-    return jsonify({"status": "error", "message": "Key not found"})
+def admin_ban():
+    k = request.json["key"]
+    if k in keys: keys[k]["banned"] = True; save_keys()
+    return jsonify({"status": "ok"})
 
 @app.route("/api/admin/unban", methods=["POST"])
-def admin_unban_key():
-    """Разбанить ключ"""
-    data = request.json
-    key = data.get("key")
-    
-    if key in keys:
-        keys[key]["banned"] = False
-        save_keys()
-        return jsonify({"status": "ok"})
-    
-    return jsonify({"status": "error", "message": "Key not found"})
+def admin_unban():
+    k = request.json["key"]
+    if k in keys: keys[k]["banned"] = False; save_keys()
+    return jsonify({"status": "ok"})
 
 @app.route("/api/admin/delete", methods=["POST"])
-def admin_delete_key():
-    """Удалить ключ"""
-    data = request.json
-    key = data.get("key")
-    
-    if key in keys:
-        del keys[key]
-        save_keys()
-        return jsonify({"status": "ok"})
-    
-    return jsonify({"status": "error", "message": "Key not found"})
+def admin_del():
+    k = request.json["key"]
+    if k in keys: del keys[k]; save_keys()
+    return jsonify({"status": "ok"})
 
 # ═══════════════════════════════════════════════
 # 🚀 ЗАПУСК
 # ═══════════════════════════════════════════════
 if __name__ == "__main__":
-    print("=" * 60)
-    print("🔐 Scared Opti Server v2.0")
-    print("=" * 60)
-    print(f"📊 Загружено ключей: {len(keys)}")
-    print(f"🌐 Админ-панель: http://localhost:10000")
-    print(f"🔑 API активации: http://localhost:10000/activate")
-    print("=" * 60)
-    app.run(host="0.0.0.0", port=10000, debug=True)
+    port = int(os.environ.get("PORT", 10000))
+    print(f"🔐 Scared Opti Server v2.0 | Port: {port} | Keys: {len(keys)}")
+    app.run(host="0.0.0.0", port=port, debug=False)
