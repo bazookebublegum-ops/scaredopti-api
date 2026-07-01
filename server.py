@@ -104,7 +104,7 @@ if not keys:
     print(f"[OK] Initialized {len(keys)} keys")
 
 # ═══════════════════════════════════════════════
-# 🎨 АДМИНКА С ВКЛАДКОЙ USED И СОРТИРОВКОЙ
+# 🎨 АДМИНКА С 3 ПЛАШКАМИ И СОРТИРОВКОЙ
 # ═══════════════════════════════════════════════
 ADMIN_HTML = """
 <!DOCTYPE html>
@@ -113,7 +113,7 @@ ADMIN_HTML = """
     <meta charset="UTF-8">
     <title>Scared Opti Admin</title>
     <style>
-        :root { --bg: #000; --surface: #0a0a0a; --border: #1a1a1a; --text: #fff; --muted: #666; --danger: #ff0000; --success: #00ff00; }
+        :root { --bg: #000; --surface: #0a0a0a; --border: #1a1a1a; --text: #fff; --muted: #666; --danger: #ff0000; --success: #00ff00; --gold: #ffd700; }
         * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Courier New', monospace; }
         body { background: var(--bg); color: var(--text); padding: 40px; min-height: 100vh; }
         .container { max-width: 1200px; margin: 0 auto; }
@@ -121,10 +121,18 @@ ADMIN_HTML = """
         header { border-bottom: 1px solid var(--border); padding-bottom: 20px; margin-bottom: 40px; display: flex; justify-content: space-between; align-items: center; }
         h1 { font-size: 24px; font-weight: normal; letter-spacing: 2px; text-transform: uppercase; }
         
-        .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 20px; margin-bottom: 40px; }
-        .stat { background: var(--surface); border: 1px solid var(--border); padding: 20px; }
-        .stat-label { font-size: 10px; color: var(--muted); text-transform: uppercase; margin-bottom: 8px; }
-        .stat-value { font-size: 28px; font-weight: bold; }
+        /* 3 СПЕЦИАЛЬНЫЕ ПЛАШКИ */
+        .tier-cards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; margin-bottom: 40px; }
+        .tier-card { background: var(--surface); border: 1px solid var(--border); padding: 24px; position: relative; overflow: hidden; }
+        .tier-card::before { content:''; position:absolute; top:0; left:0; right:0; height:2px; }
+        .tier-card.basic::before { background: #444; }
+        .tier-card.premium::before { background: var(--gold); }
+        .tier-card.owner::before { background: var(--danger); }
+        
+        .tier-label { font-size: 10px; color: var(--muted); text-transform: uppercase; margin-bottom: 12px; letter-spacing: 1px; }
+        .tier-count { font-size: 36px; font-weight: bold; margin-bottom: 8px; }
+        .tier-sub { font-size: 11px; color: var(--muted); }
+        .tier-sub span { color: var(--text); }
         
         .tabs { display: flex; gap: 10px; margin-bottom: 20px; border-bottom: 1px solid var(--border); }
         .tab { padding: 10px 20px; cursor: pointer; color: var(--muted); text-transform: uppercase; font-size: 12px; border-bottom: 2px solid transparent; transition: all 0.2s; }
@@ -145,8 +153,8 @@ ADMIN_HTML = """
         
         .badge { padding: 2px 8px; font-size: 10px; text-transform: uppercase; border: 1px solid; }
         .badge-basic { border-color: #444; color: #888; }
-        .badge-premium { border-color: #ffd700; color: #ffd700; }
-        .badge-owner { border-color: #ff0000; color: #ff0000; }
+        .badge-premium { border-color: var(--gold); color: var(--gold); }
+        .badge-owner { border-color: var(--danger); color: var(--danger); }
         
         .status-active { color: var(--success); }
         .status-banned { color: var(--danger); font-weight: bold; }
@@ -164,14 +172,26 @@ ADMIN_HTML = """
     <div class="container">
         <header>
             <h1>Scared Opti // Admin</h1>
-            <div style="font-size: 10px; color: var(--muted);">v2.1 SORTABLE</div>
+            <div style="font-size: 10px; color: var(--muted);">v2.2 TIER CARDS</div>
         </header>
         
-        <div class="stats">
-            <div class="stat"><div class="stat-label">Total Keys</div><div class="stat-value" id="total">0</div></div>
-            <div class="stat"><div class="stat-label">Active</div><div class="stat-value" id="active">0</div></div>
-            <div class="stat"><div class="stat-label">Banned</div><div class="stat-value" id="banned" style="color:var(--danger)">0</div></div>
-            <div class="stat"><div class="stat-label">Unused</div><div class="stat-value" id="unused">0</div></div>
+        <!-- 3 СПЕЦИАЛЬНЫЕ ПЛАШКИ -->
+        <div class="tier-cards">
+            <div class="tier-card basic">
+                <div class="tier-label">Basic Keys</div>
+                <div class="tier-count" id="basicCount">0</div>
+                <div class="tier-sub"><span id="basicUsed">0</span> used / <span id="basicTotal">0</span> total</div>
+            </div>
+            <div class="tier-card premium">
+                <div class="tier-label">Premium Keys</div>
+                <div class="tier-count" id="premCount">0</div>
+                <div class="tier-sub"><span id="premUsed">0</span> used / <span id="premTotal">0</span> total</div>
+            </div>
+            <div class="tier-card owner">
+                <div class="tier-label">Owner Keys</div>
+                <div class="tier-count" id="ownerCount">0</div>
+                <div class="tier-sub"><span id="ownerUsed">0</span> used / <span id="ownerTotal">0</span> total</div>
+            </div>
         </div>
         
         <div class="tabs">
@@ -214,10 +234,26 @@ ADMIN_HTML = """
             const data = await res.json();
             allKeysData = data.keys;
             
-            document.getElementById('total').textContent = data.stats.total;
-            document.getElementById('active').textContent = data.stats.active;
-            document.getElementById('banned').textContent = data.stats.banned;
-            document.getElementById('unused').textContent = data.stats.unused;
+            // Обновляем 3 специальные плашки
+            const tiers = { BASIC: {total:0, used:0}, PREMIUM: {total:0, used:0}, OWNER: {total:0, used:0} };
+            data.keys.forEach(k => {
+                if(tiers[k.tier]) {
+                    tiers[k.tier].total++;
+                    if(k.used) tiers[k.tier].used++;
+                }
+            });
+            
+            document.getElementById('basicTotal').textContent = tiers.BASIC.total;
+            document.getElementById('basicUsed').textContent = tiers.BASIC.used;
+            document.getElementById('basicCount').textContent = tiers.BASIC.total - tiers.BASIC.used;
+            
+            document.getElementById('premTotal').textContent = tiers.PREMIUM.total;
+            document.getElementById('premUsed').textContent = tiers.PREMIUM.used;
+            document.getElementById('premCount').textContent = tiers.PREMIUM.total - tiers.PREMIUM.used;
+            
+            document.getElementById('ownerTotal').textContent = tiers.OWNER.total;
+            document.getElementById('ownerUsed').textContent = tiers.OWNER.used;
+            document.getElementById('ownerCount').textContent = tiers.OWNER.total - tiers.OWNER.used;
             
             renderTable();
         }
@@ -344,15 +380,10 @@ def activate():
 
 @app.route("/api/admin/keys")
 def admin_keys():
-    stats = {"total": 0, "active": 0, "banned": 0, "unused": 0}
     keys_list = []
     for key, data in keys.items():
         keys_list.append({"key": key, "tier": data["tier"], "used": data["used"], "hwid": data["hwid"], "first_ip": data["first_ip"], "activated_at": data["activated_at"], "banned": data["banned"]})
-        stats["total"] += 1
-        if data["banned"]: stats["banned"] += 1
-        elif data["used"]: stats["active"] += 1
-        else: stats["unused"] += 1
-    return jsonify({"keys": keys_list, "stats": stats})
+    return jsonify({"keys": keys_list})
 
 @app.route("/api/admin/add", methods=["POST"])
 def admin_add():
@@ -382,5 +413,5 @@ def admin_del():
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 10000))
-    print(f"🔐 Scared Opti Server v2.1 | Port: {port} | Keys: {len(keys)}")
+    print(f"🔐 Scared Opti Server v2.2 | Port: {port} | Keys: {len(keys)}")
     app.run(host="0.0.0.0", port=port, debug=False)
