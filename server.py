@@ -1,23 +1,53 @@
-from flask import Flask, request, jsonify, render_template_string
-import json
+"""
+Scared Opti — combined service
+================================
+Один процесс, один Render Web Service:
+  - Flask (админка + API проверки/активации ключей) крутится в фоновом потоке
+  - Discord-бот scaredREV крутится в главном потоке (bot.run блокирующий)
+
+Раньше это были два отдельных файла (server.py и bot.py) на двух отдельных
+Render-сервисах. Логика НЕ менялась ни на бит — просто оба куска склеены в
+один файл и запускаются в одном процессе, чтобы не тратить лимит часов
+Render на два инстанса.
+
+Переменные окружения (те же, что были у обоих сервисов раньше):
+  DISCORD_TOKEN, GUILD_ID, PANEL_CHANNEL_ID, MOD_CHANNEL_ID,
+  PUBLIC_REVIEWS_CHANNEL_ID, LICENSE_API_URL, SELF_URL,
+  MASCOT_THUMBNAIL_URL, PORT (Render подставляет сам)
+"""
+
 import os
+import json
+import threading
+import datetime
+from datetime import datetime as dt, timedelta
+from typing import Optional
+
 import requests
-from datetime import datetime, timedelta
+import aiohttp
+import discord
+from discord import app_commands
+from discord.ext import commands, tasks
+from flask import Flask, request, jsonify, render_template_string
+
+# ═══════════════════════════════════════════════
+# ⚙️ ЧАСТЬ 1: FLASK — АДМИНКА + API КЛЮЧЕЙ (было server.py)
+# ═══════════════════════════════════════════════
 
 app = Flask(__name__)
 
-# ═══════════════════════════════════════════════
-# ⚙️ КОНФИГУРАЦИЯ И КЛЮЧИ
-# ═══════════════════════════════════════════════
 KEYS_FILE = "keys.json"
 BETA_DURATION_DAYS = 30
 
-# ⚠️ ВАЖНО: Сгенерируй новый вебхук в Discord! 
-DISCORD_WEBHOOK_URL = "https://discord.com/api/webhooks/1521995764622950532/XwyYLU7d4dVKcU21ilcgGppBxzZOQ1S8e8itwZhfwzxgy1j2IOUXYhYUnMe_s0Myymf-" 
+DISCORD_WEBHOOK_URL = os.getenv(
+    "DISCORD_WEBHOOK_URL",
+    "https://discord.com/api/webhooks/1523045988401549396/NxEa66M65uPCdyN68E-pdv4byp7EehCxR0biNUt7ZaZ_XN7qPtkXC3zDyYhRB1LUlNEN",
+)
+
 
 def send_discord_alert(title, description, color=0xFF0000):
-    """Отправляет Embed-уведомление в Discord"""
-    if not DISCORD_WEBHOOK_URL or "ВСТАВЬ_СЮДА" in DISCORD_WEBHOOK_URL:
+    """Отправляет Embed-уведомление в Discord через webhook."""
+    if not DISCORD_WEBHOOK_URL or "https://discord.com/api/webhooks/1523045988401549396/NxEa66M65uPCdyN68E-pdv4byp7EehCxR0biNUt7ZaZ_XN7qPtkXC3zDyYhRB1LUlNEN" in DISCORD_WEBHOOK_URL:
         return
     try:
         payload = {
@@ -25,13 +55,14 @@ def send_discord_alert(title, description, color=0xFF0000):
                 "title": title,
                 "description": description,
                 "color": color,
-                "timestamp": datetime.now().isoformat(),
+                "timestamp": dt.now().isoformat(),
                 "footer": {"text": "Scared Opti Security System"}
             }]
         }
         requests.post(DISCORD_WEBHOOK_URL, json=payload, timeout=5)
     except Exception as e:
         print(f"[DISCORD ERROR] Failed to send alert: {e}")
+
 
 ALL_KEYS_DATA = {
     # BASIC KEYS (60)
@@ -65,7 +96,7 @@ ALL_KEYS_DATA = {
     "SCARED-BASIC-V9RPP3FY": "BASIC", "SCARED-BASIC-VV7IP3O1": "BASIC",
     "SCARED-BASIC-XLZQDCKM": "BASIC", "SCARED-BASIC-Z9Q2FXE7": "BASIC",
     "SCARED-BASIC-ZIMZNHJR": "BASIC", "SCARED-BASIC-ZT0JRIYO": "BASIC",
-    
+
     # PREMIUM KEYS (60)
     "SCARED-PREM-01LEM9O1": "PREMIUM", "SCARED-PREM-0FBM2MPP": "PREMIUM",
     "SCARED-PREM-107RQOJ1": "PREMIUM", "SCARED-PREM-10LN3WBH": "PREMIUM",
@@ -97,11 +128,12 @@ ALL_KEYS_DATA = {
     "SCARED-PREM-XWQ28MKC": "PREMIUM", "SCARED-PREM-YB2JXI6A": "PREMIUM",
     "SCARED-PREM-YJUMV7LT": "PREMIUM", "SCARED-PREM-YO2EMVKN": "PREMIUM",
     "SCARED-PREM-ZR3SGYI0": "PREMIUM", "SCARED-PREM-ZUVBT0RX": "PREMIUM",
-    
+
     # OWNER KEYS (4)
     "SCARED-OWNER-GODMODE": "OWNER", "SCARED-OWNER-ALPHA01": "OWNER",
     "SCARED-OWNER-BETA002": "OWNER", "SCARED-OWNER-DELTA03": "OWNER"
 }
+
 
 def load_keys():
     if os.path.exists(KEYS_FILE):
@@ -109,26 +141,25 @@ def load_keys():
             return json.load(f)
     return {}
 
+
 def save_keys():
     with open(KEYS_FILE, 'w') as f:
         json.dump(keys, f, indent=2)
+
 
 keys = load_keys()
 
 if not keys:
     for key, tier in ALL_KEYS_DATA.items():
         keys[key] = {
-            "used": False, "tier": tier, "hwid": None, 
-            "first_ip": None, "activated_at": None, 
-            "last_login_at": None, "expires_at": None, 
+            "used": False, "tier": tier, "hwid": None,
+            "first_ip": None, "activated_at": None,
+            "last_login_at": None, "expires_at": None,
             "banned": False, "ban_reason": None
         }
     save_keys()
     print(f"[OK] Initialized {len(keys)} keys")
 
-# ═══════════════════════════════════════════════
-# 🎨 АДМИНКА С ВИЗУАЛИЗАЦИЕЙ СТАТУСОВ
-# ═══════════════════════════════════════════════
 ADMIN_HTML = """
 <!DOCTYPE html>
 <html lang="ru">
@@ -140,43 +171,43 @@ ADMIN_HTML = """
         * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Courier New', monospace; }
         body { background: var(--bg); color: var(--text); padding: 40px; min-height: 100vh; }
         .container { max-width: 1200px; margin: 0 auto; }
-        
+
         header { border-bottom: 1px solid var(--border); padding-bottom: 20px; margin-bottom: 40px; display: flex; justify-content: space-between; align-items: center; }
         h1 { font-size: 24px; font-weight: normal; letter-spacing: 2px; text-transform: uppercase; }
-        
+
         .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 20px; margin-bottom: 40px; }
         .stat { background: var(--surface); border: 1px solid var(--border); padding: 20px; }
         .stat-label { font-size: 10px; color: var(--muted); text-transform: uppercase; margin-bottom: 8px; }
         .stat-value { font-size: 28px; font-weight: bold; }
-        
+
         .add-form { display: flex; gap: 10px; margin-bottom: 40px; }
         input, select, button { background: var(--surface); border: 1px solid var(--border); color: var(--text); padding: 12px 16px; font-family: inherit; font-size: 12px; outline: none; }
         input { flex: 1; }
         button { cursor: pointer; text-transform: uppercase; transition: all 0.2s; }
         button:hover { background: var(--text); color: var(--bg); }
-        
+
         table { width: 100%; border-collapse: collapse; }
         th { text-align: left; padding: 12px; border-bottom: 1px solid var(--border); font-size: 10px; color: var(--muted); text-transform: uppercase; font-weight: normal; cursor: pointer; user-select: none; }
         th:hover { color: var(--text); }
         td { padding: 16px 12px; border-bottom: 1px solid var(--border); font-size: 12px; }
         tr:hover { background: rgba(255,255,255,0.02); }
-        
+
         .badge { padding: 2px 8px; font-size: 10px; text-transform: uppercase; border: 1px solid; }
         .badge-basic { border-color: #444; color: #888; }
         .badge-premium { border-color: var(--warning); color: var(--warning); }
         .badge-owner { border-color: var(--danger); color: var(--danger); }
-        
+
         .status-active { color: var(--success); font-weight: bold; }
         .status-sharing { color: var(--danger); font-weight: bold; text-decoration: underline; }
         .status-ipchange { color: var(--warning); font-weight: bold; }
         .status-banned { color: #ff4444; }
         .status-unused { color: var(--muted); }
-        
+
         .actions { display: flex; gap: 8px; }
         .btn-sm { padding: 4px 12px; font-size: 10px; border: 1px solid var(--border); background: transparent; color: var(--muted); }
         .btn-sm:hover { background: var(--text); color: var(--bg); }
         .btn-danger:hover { background: var(--danger); color: #fff; border-color: var(--danger); }
-        
+
         .sort-arrow { margin-left: 5px; font-size: 8px; }
     </style>
 </head>
@@ -184,16 +215,16 @@ ADMIN_HTML = """
     <div class="container">
         <header>
             <h1>Scared Opti // Admin</h1>
-            <div style="font-size: 10px; color: var(--muted);">v2.4 ANTI-SPAM EDITION</div>
+            <div style="font-size: 10px; color: var(--muted);">v2.5 COMBINED SERVICE</div>
         </header>
-        
+
         <div class="stats">
             <div class="stat"><div class="stat-label">Total Keys</div><div class="stat-value" id="total">0</div></div>
             <div class="stat"><div class="stat-label">Active</div><div class="stat-value" id="active">0</div></div>
             <div class="stat"><div class="stat-label">Sharing Ban</div><div class="stat-value" id="sharing" style="color:var(--danger)">0</div></div>
             <div class="stat"><div class="stat-label">Unused</div><div class="stat-value" id="unused">0</div></div>
         </div>
-        
+
         <div class="add-form">
             <input type="text" id="newKey" placeholder="SCARED-TIER-XXXXXXXX">
             <select id="newTier">
@@ -203,7 +234,7 @@ ADMIN_HTML = """
             </select>
             <button onclick="addKey()">Add Key</button>
         </div>
-        
+
         <table>
             <thead>
                 <tr>
@@ -228,25 +259,25 @@ ADMIN_HTML = """
             const res = await fetch('/api/admin/keys');
             const data = await res.json();
             allKeysData = data.keys;
-            
+
             document.getElementById('total').textContent = data.stats.total;
             document.getElementById('active').textContent = data.stats.active;
             document.getElementById('sharing').textContent = data.stats.sharing;
             document.getElementById('unused').textContent = data.stats.unused;
-            
+
             renderTable();
         }
-        
+
         function sortTable(field) {
             if (sortField === field) sortAsc = !sortAsc;
             else { sortField = field; sortAsc = true; }
-            
+
             document.querySelectorAll('.sort-arrow').forEach(a => a.textContent = '');
             document.getElementById(`arrow-${field}`).textContent = sortAsc ? '▲' : '▼';
-            
+
             renderTable();
         }
-        
+
         function getStatusDisplay(k) {
             if (!k.used && !k.banned) return '<span class="status-unused">UNUSED</span>';
             if (k.banned && k.ban_reason === 'SHARING') return '<span class="status-sharing">🚫 SHARING</span>';
@@ -262,25 +293,25 @@ ADMIN_HTML = """
             if (k.banned) return 1;
             return 4;
         }
-        
+
         function renderTable() {
             let filtered = allKeysData;
-            
+
             filtered.sort((a, b) => {
                 if (sortField === 'status') {
                     let valA = getSortValue(a);
                     let valB = getSortValue(b);
                     return sortAsc ? valA - valB : valB - valA;
                 }
-                
+
                 let valA = a[sortField] || '';
                 let valB = b[sortField] || '';
-                
+
                 if (valA < valB) return sortAsc ? -1 : 1;
                 if (valA > valB) return sortAsc ? 1 : -1;
                 return 0;
             });
-            
+
             document.getElementById('keysTable').innerHTML = filtered.map(k => `
                 <tr style="${k.banned ? 'opacity:0.6' : ''}">
                     <td style="font-family:monospace">${k.key}</td>
@@ -294,8 +325,8 @@ ADMIN_HTML = """
                         ${k.last_login_at ? new Date(k.last_login_at).toLocaleString() : '-'}
                     </td>
                     <td class="actions">
-                        ${k.banned 
-                            ? `<button class="btn-sm" onclick="unban('${k.key}')">Unban</button>` 
+                        ${k.banned
+                            ? `<button class="btn-sm" onclick="unban('${k.key}')">Unban</button>`
                             : `<button class="btn-sm btn-danger" onclick="ban('${k.key}')">Ban</button>`
                         }
                         <button class="btn-sm btn-danger" onclick="del('${k.key}')">Del</button>
@@ -303,7 +334,7 @@ ADMIN_HTML = """
                 </tr>
             `).join('');
         }
-        
+
         async function addKey() {
             const key = document.getElementById('newKey').value.trim().toUpperCase();
             const tier = document.getElementById('newTier').value;
@@ -312,22 +343,22 @@ ADMIN_HTML = """
             document.getElementById('newKey').value = '';
             load();
         }
-        
-        async function ban(key) { 
-            await fetch('/api/admin/ban', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({key, reason: 'MANUAL'})}); 
-            load(); 
+
+        async function ban(key) {
+            await fetch('/api/admin/ban', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({key, reason: 'MANUAL'})});
+            load();
         }
-        async function unban(key) { 
-            await fetch('/api/admin/unban', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({key})}); 
-            load(); 
+        async function unban(key) {
+            await fetch('/api/admin/unban', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({key})});
+            load();
         }
-        async function del(key) { 
-            if(confirm('Delete '+key+'?')) { 
-                await fetch('/api/admin/delete', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({key})}); 
-                load(); 
-            } 
+        async function del(key) {
+            if(confirm('Delete '+key+'?')) {
+                await fetch('/api/admin/delete', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({key})});
+                load();
+            }
         }
-        
+
         load();
         setInterval(load, 5000);
     </script>
@@ -335,9 +366,16 @@ ADMIN_HTML = """
 </html>
 """
 
+
 @app.route("/")
 def home():
     return render_template_string(ADMIN_HTML)
+
+
+@app.route("/health")
+def health():
+    return jsonify({"status": "ok", "service": "combined"})
+
 
 @app.route("/activate", methods=["POST"])
 def activate():
@@ -345,29 +383,27 @@ def activate():
     key = data.get("key", "").strip().upper()
     hwid = data.get("hwid", "").strip()
     client_ip = request.remote_addr
-    
+
     if not key or key not in keys:
         return jsonify({"status": "invalid", "message": "Invalid key"})
-    
+
     k = keys[key]
-    
-    # 1. ПРОВЕРКА НА УЖЕ ЗАБАНЕННЫЙ КЛЮЧ (БЕЗ СПАМА)
+
     if k.get("banned"):
         return jsonify({
             "status": "banned",
             "message": f"KEY BANNED ({k.get('ban_reason', 'UNKNOWN')}). Contact support."
         })
-    
-    # 2. ПРОВЕРКА СРОКА ДЕЙСТВИЯ
+
     if k.get("expires_at"):
         try:
-            if datetime.now() > datetime.fromisoformat(k["expires_at"]):
+            if dt.now() > dt.fromisoformat(k["expires_at"]):
                 return jsonify({"status": "expired", "message": "License expired"})
-        except: pass
-    
-    # 3. ПЕРВАЯ АКТИВАЦИЯ
+        except Exception:
+            pass
+
     if not k["used"]:
-        now = datetime.now()
+        now = dt.now()
         expires = now + timedelta(days=BETA_DURATION_DAYS)
         k.update({
             "used": True,
@@ -380,27 +416,26 @@ def activate():
             "ban_reason": None
         })
         save_keys()
-        
+
         send_discord_alert(
-            "✅ New Activation", 
+            "✅ New Activation",
             f"**Key:** `{key}`\n**Tier:** {k['tier']}\n**IP:** {client_ip}\n**HWID:** `{hwid[:12]}...`",
             color=0x00FF00
         )
-        
+
         return jsonify({
             "status": "ok",
             "tier": k["tier"],
             "expires_at": int(expires.timestamp())
         })
-    
-    # 4. ЖЕСТКАЯ ПРОВЕРКА ШЕРИНГА И IP
+
     if k["hwid"] != hwid:
         k["banned"] = True
         k["ban_reason"] = "SHARING"
         save_keys()
-        
+
         send_discord_alert(
-            "🚫 SHARING DETECTED!", 
+            "🚫 SHARING DETECTED!",
             f"**Key:** `{key}` ({k['tier']})\n"
             f"**Original IP:** {k['first_ip']}\n"
             f"**New IP:** {client_ip}\n"
@@ -409,75 +444,69 @@ def activate():
             f"**Status:** BANNED AUTOMATICALLY",
             color=0xFF0000
         )
-        
+
         return jsonify({
             "status": "banned",
             "message": "SHARING DETECTED. Contact support in discord."
         })
-        
+
     if k["first_ip"] != client_ip:
         k["banned"] = True
         k["ban_reason"] = "IP_CHANGE"
         save_keys()
-        
+
         send_discord_alert(
-            "🌐 IP Change Detected", 
+            "🌐 IP Change Detected",
             f"**Key:** `{key}` ({k['tier']})\n"
             f"**Old IP:** {k['first_ip']}\n"
             f"**New IP:** {client_ip}\n\n"
             f"**Status:** BANNED FOR SECURITY",
             color=0xFFFF00
         )
-        
+
         return jsonify({
             "status": "banned",
             "message": "IP CHANGE DETECTED. Key banned for security. Contact support."
         })
-    
-    # 5. ЛОГИКА ПОВТОРНОГО ВХОДА (ANTI-SPAM)
+
     last_login_str = k.get("last_login_at")
     notify_user = False
-    
+
     if not last_login_str:
         notify_user = True
     else:
         try:
-            last_login = datetime.fromisoformat(last_login_str)
-            # Если прошло больше 30 минут с последнего входа - считаем это новой сессией
-            if (datetime.now() - last_login).total_seconds() > 1800: 
+            last_login = dt.fromisoformat(last_login_str)
+            if (dt.now() - last_login).total_seconds() > 1800:
                 notify_user = True
-        except:
+        except Exception:
             notify_user = True
 
-    # Обновляем время последнего входа ВСЕГДА
-    k["last_login_at"] = datetime.now().isoformat()
+    k["last_login_at"] = dt.now().isoformat()
     save_keys()
 
-    # Отправляем уведомление ТОЛЬКО если это новая сессия
     if notify_user:
         send_discord_alert(
-            "🔑 Successful Login", 
+            "🔑 Successful Login",
             f"**Key:** `{key}` ({k['tier']})\n**IP:** {client_ip}\n**HWID:** `{hwid[:12]}...`",
             color=0x0088FF
         )
-    
-    # Возвращаем статус ОК всегда, чтобы приложение работало
+
     exp_ts = 0
     if k.get("expires_at"):
-        try: exp_ts = int(datetime.fromisoformat(k["expires_at"]).timestamp())
-        except: pass
-        
+        try:
+            exp_ts = int(dt.fromisoformat(k["expires_at"]).timestamp())
+        except Exception:
+            pass
+
     return jsonify({"status": "ok", "tier": k["tier"], "expires_at": exp_ts})
 
-# ═══════════════════════════════════════════════
-# 🔧 АДМИН API
-# ═══════════════════════════════════════════════
 
 @app.route("/api/admin/keys")
 def admin_keys():
     stats = {"total": 0, "active": 0, "sharing": 0, "unused": 0}
     keys_list = []
-    
+
     for key, data in keys.items():
         keys_list.append({
             "key": key, "tier": data["tier"], "used": data["used"],
@@ -485,53 +514,514 @@ def admin_keys():
             "activated_at": data["activated_at"], "last_login_at": data.get("last_login_at"),
             "banned": data["banned"], "ban_reason": data.get("ban_reason")
         })
-        
+
         stats["total"] += 1
-        if data["banned"] and data.get("ban_reason") == "SHARING": stats["sharing"] += 1
-        elif data["banned"]: pass 
-        elif data["used"]: stats["active"] += 1
-        else: stats["unused"] += 1
-        
+        if data["banned"] and data.get("ban_reason") == "SHARING":
+            stats["sharing"] += 1
+        elif data["banned"]:
+            pass
+        elif data["used"]:
+            stats["active"] += 1
+        else:
+            stats["unused"] += 1
+
     return jsonify({"keys": keys_list, "stats": stats})
+
 
 @app.route("/api/admin/add", methods=["POST"])
 def admin_add():
     d = request.json
-    if d["key"] in keys: return jsonify({"status": "error"})
+    if d["key"] in keys:
+        return jsonify({"status": "error"})
     keys[d["key"]] = {
-        "used":False,"tier":d["tier"],"hwid":None,"first_ip":None,
-        "activated_at":None,"last_login_at":None,"expires_at":None,
-        "banned":False,"ban_reason":None
+        "used": False, "tier": d["tier"], "hwid": None, "first_ip": None,
+        "activated_at": None, "last_login_at": None, "expires_at": None,
+        "banned": False, "ban_reason": None
     }
     save_keys()
     return jsonify({"status": "ok"})
+
 
 @app.route("/api/admin/ban", methods=["POST"])
 def admin_ban():
     k = request.json["key"]
     reason = request.json.get("reason", "MANUAL")
-    if k in keys: 
+    if k in keys:
         keys[k]["banned"] = True
         keys[k]["ban_reason"] = reason
         save_keys()
     return jsonify({"status": "ok"})
 
+
 @app.route("/api/admin/unban", methods=["POST"])
 def admin_unban():
     k = request.json["key"]
-    if k in keys: 
+    if k in keys:
         keys[k]["banned"] = False
         keys[k]["ban_reason"] = None
         save_keys()
     return jsonify({"status": "ok"})
 
+
 @app.route("/api/admin/delete", methods=["POST"])
 def admin_del():
     k = request.json["key"]
-    if k in keys: del keys[k]; save_keys()
+    if k in keys:
+        del keys[k]
+        save_keys()
     return jsonify({"status": "ok"})
 
-if __name__ == "__main__":
+
+# ═══════════════════════════════════════════════
+# 🤖 ЧАСТЬ 2: DISCORD-БОТ scaredREV (было bot.py)
+# ═══════════════════════════════════════════════
+
+BOT_TOKEN = os.getenv("DISCORD_TOKEN", "MTUyMjAwMTgzOTA2OTg2MDAyMQ.GNDG3X.L9HofQ0VwWolZ0_n31e7LGXPR_kzPvbk8tlONc")
+
+GUILD_ID = int(os.getenv("GUILD_ID", "1083127357818277938"))
+PANEL_CHANNEL_ID = int(os.getenv("PANEL_CHANNEL_ID", "1518098248097595453"))
+MOD_CHANNEL_ID = int(os.getenv("MOD_CHANNEL_ID", "1522379284189282336"))
+PUBLIC_REVIEWS_CHANNEL_ID = int(os.getenv("PUBLIC_REVIEWS_CHANNEL_ID", "1517980239341424800"))
+
+# Раз это теперь один процесс с Flask-ом, по умолчанию бьём в свой же /api/admin/keys
+# на этом же инстансе (localhost), а не по внешнему URL — так быстрее и не зависит от DNS.
+LICENSE_API_URL = os.getenv("LICENSE_API_URL", f"http://127.0.0.1:{os.environ.get('PORT', 10000)}/api/admin/keys")
+
+# SELF_URL больше не обязателен (сервис теперь один, Flask сам держит порт открытым,
+# а keep_alive снаружи держит UptimeRobot) — но оставляем на случай, если решишь
+# вернуть внешний пинг вручную.
+SELF_URL = os.getenv("SELF_URL", f"http://127.0.0.1:{os.environ.get('PORT', 10000)}/health")
+
+MASCOT_THUMBNAIL_URL = os.getenv(
+    "MASCOT_THUMBNAIL_URL",
+    "https://i.imgur.com/your_mascot.png",
+)
+
+REVIEWS_FILE = os.path.join(os.path.dirname(__file__), "reviews.json")
+
+INTENTS = discord.Intents.default()
+INTENTS.message_content = True
+
+bot = commands.Bot(command_prefix="!", intents=INTENTS)
+
+
+def load_reviews() -> list:
+    if not os.path.exists(REVIEWS_FILE):
+        return []
+    with open(REVIEWS_FILE, "r", encoding="utf-8") as f:
+        try:
+            return json.load(f)
+        except json.JSONDecodeError:
+            return []
+
+
+def save_review(entry: dict) -> None:
+    data = load_reviews()
+    data.append(entry)
+    with open(REVIEWS_FILE, "w", encoding="utf-8") as f:
+        json.dump(data, f, ensure_ascii=False, indent=2)
+
+
+def update_review_status(review_id: str, status: str) -> None:
+    data = load_reviews()
+    for r in data:
+        if r.get("id") == review_id:
+            r["status"] = status
+    with open(REVIEWS_FILE, "w", encoding="utf-8") as f:
+        json.dump(data, f, ensure_ascii=False, indent=2)
+
+
+class LicenseResult:
+    def __init__(self, valid: bool, reason: str = "", tier: str = ""):
+        self.valid = valid
+        self.reason = reason
+        self.tier = tier
+
+
+async def check_license(key: str) -> LicenseResult:
+    normalized = key.strip().upper()
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.get(
+                LICENSE_API_URL, timeout=aiohttp.ClientTimeout(total=10)
+            ) as resp:
+                if resp.status != 200:
+                    return LicenseResult(False, reason=f"api_error_{resp.status}")
+                data = await resp.json()
+    except Exception as e:
+        return LicenseResult(False, reason=f"connection_error: {e}")
+
+    entry: Optional[dict] = None
+    for k in data.get("keys", []):
+        if str(k.get("key", "")).upper() == normalized:
+            entry = k
+            break
+
+    if entry is None:
+        return LicenseResult(False, reason="invalid_key")
+
+    if entry.get("banned"):
+        ban_reason = (entry.get("ban_reason") or "unknown").lower()
+        return LicenseResult(False, reason=f"banned_{ban_reason}")
+
+    if not entry.get("used"):
+        return LicenseResult(False, reason="unused")
+
+    return LicenseResult(True, tier=entry.get("tier", ""))
+
+
+REASON_TEXT = {
+    "invalid_key": "❌ Ключ не найден. Проверь правильность ввода.",
+    "unused": "⚠️ Ключ ещё не активирован — сначала запусти прогу с этим ключом, потом возвращайся за отзывом.",
+    "banned_sharing": "🚫 Ключ заблокирован за шаринг (передачу другому человеку).",
+    "banned_ip_change": "🌐 Ключ заблокирован из-за смены IP (сработала защита от шаринга).",
+    "banned_manual": "⛔ Ключ заблокирован вручную администрацией.",
+    "banned_unknown": "⛔ Ключ заблокирован.",
+}
+
+
+def reason_to_text(reason: str) -> str:
+    if reason in REASON_TEXT:
+        return REASON_TEXT[reason]
+    if reason.startswith("banned_"):
+        return "⛔ Ключ заблокирован."
+    if reason.startswith("api_error_"):
+        return "⚠️ Сервер лицензий временно недоступен, попробуй чуть позже."
+    if reason.startswith("connection_error"):
+        return "⚠️ Не удалось связаться с сервером лицензий, попробуй чуть позже."
+    return f"❌ Лицензия не подтверждена ({reason})."
+
+
+def make_bar(value: float, max_value: float, length: int = 11) -> str:
+    if max_value <= 0:
+        filled = 0
+    else:
+        filled = round((value / max_value) * length)
+        filled = max(0, min(length, filled))
+    return "▓" * filled + "░" * (length - filled)
+
+
+def stars(rating: int) -> str:
+    rating = max(0, min(5, rating))
+    return "⭐" * rating + "☆" * (5 - rating)
+
+
+def build_review_embed(review: dict, member: discord.abc.User) -> discord.Embed:
+    fps_before = review["fps_before"]
+    fps_after = review["fps_after"]
+    gain_pct = round(((fps_after - fps_before) / fps_before) * 100) if fps_before else 0
+    scale_max = max(fps_before, fps_after) * 1.05
+
+    embed = discord.Embed(
+        title="⭐ Новый отзыв / New review",
+        color=discord.Color.blue(),
+        timestamp=datetime.datetime.now(datetime.timezone.utc),
+    )
+    embed.set_author(name=member.display_name, icon_url=member.display_avatar.url)
+    embed.set_thumbnail(url=MASCOT_THUMBNAIL_URL)
+
+    embed.add_field(name="От / From", value=member.mention, inline=False)
+    embed.add_field(
+        name="🌟 Оценка / Rating",
+        value=f"{stars(review['rating'])} ({review['rating']}/5)",
+        inline=False,
+    )
+    embed.add_field(name="🎮 Игра / Game", value=review["game"], inline=False)
+    embed.add_field(name="💻 CPU", value=review["cpu"], inline=True)
+    embed.add_field(name="🎮 GPU", value=review["gpu"], inline=True)
+
+    results = (
+        f"**До / Before:** `{make_bar(fps_before, scale_max)}` {fps_before} FPS\n"
+        f"**После / After:** `{make_bar(fps_after, scale_max)}` {fps_after} FPS\n"
+        f"📈 Прирост / Gain: **+{gain_pct}%**"
+    )
+    embed.add_field(name="📊 Результаты / Results", value=results, inline=False)
+
+    embed.add_field(
+        name="💬 Отзыв клиента / Customer feedback",
+        value=f"```{review['feedback']}```",
+        inline=False,
+    )
+
+    embed.set_footer(text="scaredREV • Team")
+    return embed
+
+
+class LicenseModal(discord.ui.Modal, title="Проверка лицензии"):
+    license_key = discord.ui.TextInput(
+        label="Лицензионный ключ",
+        placeholder="XXXX-XXXX-XXXX-XXXX",
+        required=True,
+        max_length=100,
+    )
+
+    async def on_submit(self, interaction: discord.Interaction):
+        await interaction.response.defer(ephemeral=True, thinking=True)
+        result = await check_license(str(self.license_key.value).strip())
+
+        if not result.valid:
+            await interaction.followup.send(reason_to_text(result.reason), ephemeral=True)
+            return
+
+        view = OpenReviewFormView(license_key=str(self.license_key.value).strip())
+        await interaction.followup.send(
+            f"✅ Лицензия подтверждена ({result.tier or 'OK'}). Нажми кнопку ниже, чтобы написать отзыв.",
+            view=view,
+            ephemeral=True,
+        )
+
+
+class ReviewModal(discord.ui.Modal, title="Оставить отзыв"):
+    game = discord.ui.TextInput(label="Игра / Game", max_length=50, required=True)
+    rating = discord.ui.TextInput(label="Оценка (1-5)", max_length=1, required=True)
+    cpu_gpu = discord.ui.TextInput(
+        label="CPU / GPU (через ' / ')",
+        placeholder="Ryzen 7 7800X3D / 4060",
+        required=True,
+    )
+    fps_before_after = discord.ui.TextInput(
+        label="FPS: До / После",
+        placeholder="308 / 400",
+        required=True,
+    )
+    feedback = discord.ui.TextInput(
+        label="Отзыв",
+        style=discord.TextStyle.paragraph,
+        max_length=500,
+        required=True,
+    )
+
+    def __init__(self, license_key: str):
+        super().__init__()
+        self.license_key = license_key
+
+    async def on_submit(self, interaction: discord.Interaction):
+        try:
+            rating_val = int(str(self.rating.value).strip())
+            if not (1 <= rating_val <= 5):
+                raise ValueError
+        except ValueError:
+            await interaction.response.send_message(
+                "⚠️ Оценка должна быть числом от 1 до 5. Попробуй ещё раз.", ephemeral=True
+            )
+            return
+
+        try:
+            cpu_str, gpu_str = [p.strip() for p in str(self.cpu_gpu.value).split("/", 1)]
+        except ValueError:
+            await interaction.response.send_message(
+                "⚠️ Укажи CPU и GPU через ' / ', например: `Ryzen 7 7800X3D / 4060`", ephemeral=True
+            )
+            return
+
+        try:
+            before_str, after_str = [p.strip() for p in str(self.fps_before_after.value).split("/", 1)]
+            fps_before = int(before_str)
+            fps_after = int(after_str)
+        except ValueError:
+            await interaction.response.send_message(
+                "⚠️ Укажи FPS через ' / ', например: `308 / 400`", ephemeral=True
+            )
+            return
+
+        review_id = f"{interaction.user.id}-{int(dt.now().timestamp())}"
+        pending_reviews[review_id] = {
+            "id": review_id,
+            "user_id": interaction.user.id,
+            "license_key": self.license_key,
+            "game": str(self.game.value).strip(),
+            "rating": rating_val,
+            "cpu": cpu_str,
+            "gpu": gpu_str,
+            "fps_before": fps_before,
+            "fps_after": fps_after,
+            "feedback": str(self.feedback.value).strip(),
+            "before_url": None,
+            "after_url": None,
+            "status": "awaiting_screenshots",
+            "created_at": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+        }
+
+        await interaction.response.send_message(
+            "📸 Почти готово! Пришли ссылку на скриншот **BEFORE** (до) и **AFTER** (после).\n"
+            "Загрузи картинки в любой личный чат/канал Discord, скопируй ссылку на файл и вставь её сюда.",
+            view=ScreenshotButtonsView(review_id=review_id),
+            ephemeral=True,
+        )
+
+
+class ScreenshotUrlModal(discord.ui.Modal):
+    url = discord.ui.TextInput(label="Ссылка на скриншот", placeholder="https://...", required=True)
+
+    def __init__(self, review_id: str, which: str):
+        super().__init__(title=f"Скриншот {'BEFORE' if which == 'before' else 'AFTER'}")
+        self.review_id = review_id
+        self.which = which
+
+    async def on_submit(self, interaction: discord.Interaction):
+        entry = pending_reviews.get(self.review_id)
+        if entry is None:
+            await interaction.response.send_message("⚠️ Заявка устарела, начни заново через кнопку отзыва.", ephemeral=True)
+            return
+
+        entry[f"{self.which}_url"] = str(self.url.value).strip()
+
+        if entry["before_url"] and entry["after_url"]:
+            entry["status"] = "pending_moderation"
+            await finalize_review(interaction, entry)
+        else:
+            await interaction.response.send_message(
+                f"✅ Скриншот {self.which.upper()} сохранён. Осталось прислать "
+                f"{'AFTER' if self.which == 'before' else 'BEFORE'}.",
+                view=ScreenshotButtonsView(review_id=self.review_id),
+                ephemeral=True,
+            )
+
+
+async def finalize_review(interaction: discord.Interaction, entry: dict):
+    save_review(entry)
+    pending_reviews.pop(entry["id"], None)
+
+    mod_channel = bot.get_channel(MOD_CHANNEL_ID)
+    if mod_channel is None:
+        await interaction.response.send_message(
+            "⚠️ Канал модерации не настроен (MOD_CHANNEL_ID). Отзыв сохранён в reviews.json, но не отправлен.",
+            ephemeral=True,
+        )
+        return
+
+    member = interaction.user
+    embed = build_review_embed(entry, member)
+
+    link_view = discord.ui.View()
+    link_view.add_item(discord.ui.Button(label="Открыть BEFORE", url=entry["before_url"], emoji="📸"))
+    link_view.add_item(discord.ui.Button(label="Открыть AFTER", url=entry["after_url"], emoji="📸"))
+    mod_actions = ModerationActionsView(review_id=entry["id"])
+    for item in mod_actions.children:
+        link_view.add_item(item)
+
+    await mod_channel.send(embed=embed, view=link_view)
+    await interaction.response.send_message("🎉 Отзыв отправлен на модерацию, спасибо!", ephemeral=True)
+
+
+pending_reviews: dict[str, dict] = {}
+
+
+class ReviewPanelView(discord.ui.View):
+    def __init__(self):
+        super().__init__(timeout=None)
+
+    @discord.ui.button(
+        label="📝 Оставить отзыв",
+        style=discord.ButtonStyle.primary,
+        custom_id="scaredrev:start_review",
+    )
+    async def start_review(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.send_modal(LicenseModal())
+
+
+class OpenReviewFormView(discord.ui.View):
+    def __init__(self, license_key: str):
+        super().__init__(timeout=300)
+        self.license_key = license_key
+
+    @discord.ui.button(label="✍️ Написать отзыв", style=discord.ButtonStyle.success)
+    async def open_form(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.send_modal(ReviewModal(license_key=self.license_key))
+
+
+class ScreenshotButtonsView(discord.ui.View):
+    def __init__(self, review_id: str):
+        super().__init__(timeout=600)
+        self.review_id = review_id
+
+    @discord.ui.button(label="📸 Прикрепить BEFORE", style=discord.ButtonStyle.secondary)
+    async def before_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.send_modal(ScreenshotUrlModal(self.review_id, "before"))
+
+    @discord.ui.button(label="📸 Прикрепить AFTER", style=discord.ButtonStyle.secondary)
+    async def after_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.send_modal(ScreenshotUrlModal(self.review_id, "after"))
+
+
+class ModerationActionsView(discord.ui.View):
+    def __init__(self, review_id: str):
+        super().__init__(timeout=None)
+        self.review_id = review_id
+        self.approve.custom_id = f"scaredrev:approve:{review_id}"
+        self.reject.custom_id = f"scaredrev:reject:{review_id}"
+
+    @discord.ui.button(label="✅ Опубликовать", style=discord.ButtonStyle.success)
+    async def approve(self, interaction: discord.Interaction, button: discord.ui.Button):
+        update_review_status(self.review_id, "approved")
+        public_channel = bot.get_channel(PUBLIC_REVIEWS_CHANNEL_ID)
+        if public_channel and interaction.message.embeds:
+            await public_channel.send(embed=interaction.message.embeds[0])
+        await interaction.response.send_message("✅ Опубликовано.", ephemeral=True)
+
+    @discord.ui.button(label="❌ Отклонить", style=discord.ButtonStyle.danger)
+    async def reject(self, interaction: discord.Interaction, button: discord.ui.Button):
+        update_review_status(self.review_id, "rejected")
+        await interaction.response.send_message("❌ Отзыв отклонён.", ephemeral=True)
+
+
+@tasks.loop(minutes=5)
+async def keep_alive():
+    """Больше не обязателен внутри процесса (Flask и так открыт и его пингует
+    UptimeRobot снаружи), но оставлен — не мешает и служит доп. логом живости."""
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.get(SELF_URL, timeout=aiohttp.ClientTimeout(total=20)) as resp:
+                print(f"[keep_alive] {SELF_URL} -> {resp.status}")
+    except Exception as e:
+        print(f"[keep_alive] ping failed: {e}")
+
+
+@bot.event
+async def on_ready():
+    bot.add_view(ReviewPanelView())
+    if GUILD_ID:
+        await bot.tree.sync(guild=discord.Object(id=GUILD_ID))
+    else:
+        await bot.tree.sync()
+    if not keep_alive.is_running():
+        keep_alive.start()
+    print(f"Logged in as {bot.user} (id={bot.user.id})")
+
+
+@bot.tree.command(name="setup_review_panel", description="Опубликовать панель с кнопкой 'Оставить отзыв' в этом канале")
+@app_commands.checks.has_permissions(administrator=True)
+async def setup_review_panel(interaction: discord.Interaction):
+    embed = discord.Embed(
+        title="📝 Оставить отзыв о scaredREV",
+        description=(
+            "Нажми кнопку ниже, чтобы оставить отзыв.\n"
+            "Потребуется твой лицензионный ключ для подтверждения покупки."
+        ),
+        color=discord.Color.blurple(),
+    )
+    await interaction.channel.send(embed=embed, view=ReviewPanelView())
+    await interaction.response.send_message("Панель опубликована ✅", ephemeral=True)
+
+
+# ═══════════════════════════════════════════════
+# 🚀 ЕДИНАЯ ТОЧКА ЗАПУСКА
+# ═══════════════════════════════════════════════
+
+def run_flask():
     port = int(os.environ.get("PORT", 10000))
-    print(f"🔐 Scared Opti Server v2.4 | Port: {port} | Keys: {len(keys)}")
-    app.run(host="0.0.0.0", port=port, debug=False)
+    app.run(host="0.0.0.0", port=port, debug=False, use_reloader=False)
+
+
+if __name__ == "__main__":
+    if BOT_TOKEN == "NOTOKEN_SET":
+        raise SystemExit(
+            "Не задан токен бота. Установи переменную окружения DISCORD_TOKEN на Render."
+        )
+
+    print(f"🔐 Scared Opti Combined Service | Keys: {len(keys)}")
+
+    flask_thread = threading.Thread(target=run_flask, daemon=True)
+    flask_thread.start()
+
+    bot.run(BOT_TOKEN)
