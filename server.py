@@ -14,7 +14,7 @@ from flask import Flask, request, jsonify, render_template_string
 # ⚙️ КОНФИГУРАЦИЯ — МЕНЯЙ ЗДЕСЬ
 # ══════════════════════════════════════════════════════════════
 
-TOKEN = os.getenv("DISCORD_TOKEN", "MTUyNzcwMDc5MDgyOTkwODA1OQ.Gb7Imo.QqQE54EjTryVIl00wcljexJ4Z2VTpFMuNxvaMY")
+TOKEN = os.getenv("DISCORD_TOKEN")
 OWNER_ID = 0
 PREFIX = "!"
 
@@ -1012,7 +1012,7 @@ bot.setup_hook = setup_hook
 async def main():
     flask_thread = threading.Thread(target=run_flask, daemon=True)
     flask_thread.start()
-    if not TOKEN or "YOUR_BOT_TOKEN" in TOKEN:
+    if not TOKEN:
         print("❌ Установи DISCORD_TOKEN в переменных окружения Render")
         return
     await bot.start(TOKEN)
