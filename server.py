@@ -728,10 +728,16 @@ class OpenTicketBtn(View):
 # ══════════════════════════════════════════════════════════════
 
 async def load_cogs():
+    if not os.path.isdir("cogs"):
+        print("[!] No cogs/ folder found, skipping")
+        return
     for f in os.listdir("cogs"):
         if f.endswith(".py") and f != "__init__.py":
-            await bot.load_extension(f"cogs.{f[:-3]}")
-            print(f"[+] Loaded cog: {f[:-3]}")
+            try:
+                await bot.load_extension(f"cogs.{f[:-3]}")
+                print(f"[+] Loaded cog: {f[:-3]}")
+            except Exception as e:
+                print(f"[!] Failed to load {f}: {e}")
 
 
 # ══════════════════════════════════════════════════════════════
