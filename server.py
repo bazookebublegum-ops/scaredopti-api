@@ -14,7 +14,7 @@ from flask import Flask, request, jsonify, render_template_string
 # ⚙️ КОНФИГУРАЦИЯ — МЕНЯЙ ЗДЕСЬ
 # ══════════════════════════════════════════════════════════════
 
-TOKEN = "MTUyNzcwMDc5MDgyOTkwODA1OQ.GrFUoF.YA4XUBdWxMvSETvNKDgLXFpEG0BBYHn9UrB9n0"
+TOKEN = "MTUyNzcwMDc5MDgyOTkwODA1OQ.GJ2euW.uGvKRH1_g7IS4_4X_2H_D8yc-rnAgpudOwJAio"
 OWNER_ID = 0
 PREFIX = "!"
 
