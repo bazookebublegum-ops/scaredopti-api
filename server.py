@@ -503,6 +503,18 @@ def admin_blacklist_hwid():
     return jsonify({"status": "ok"})
 
 
+@app.route("/api/check", methods=["POST"])
+def api_check():
+    data = request.json
+    key = data.get("key", "").strip().upper()
+    if key not in keys:
+        return jsonify({"status": "invalid"})
+    k = keys[key]
+    if k.get("banned"):
+        return jsonify({"status": "banned", "reason": k.get("ban_reason", "MANUAL")})
+    return jsonify({"status": "ok", "tier": k["tier"]})
+
+
 def run_flask():
     port = int(os.environ.get("PORT", 10000))
     print(f"[+] API server on port {port}")
