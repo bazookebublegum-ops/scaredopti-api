@@ -270,7 +270,7 @@ tr:hover{background:#1c2128}
 .blacklist-box button{border-color:#f85149;color:#f85149}
 </style></head>
 <body>
-<h1>🔐 ScaredOpti Admin</h1>
+<h1>ScaredOpti Admin</h1>
 <div class=stats>
 <div class=stat blue><div class=n>{{stats.total}}</div><div class=l>Total</div></div>
 <div class=stat green><div class=n>{{stats.active}}</div><div class=l>Active</div></div>
@@ -279,16 +279,16 @@ tr:hover{background:#1c2128}
 <div class=stat><div class=n>{{stats.unused}}</div><div class=l>Unused</div></div>
 </div>
 <section>
-<h2>🖥️ HWID Blacklist</h2>
+<h2>HWID Blacklist</h2>
 <div class=blacklist-box>
 <input id=hwidInput placeholder="HWID to blacklist...">
-<button class="btn btn-ban" onclick=addHwid()>Add HWID</button>
+<button class="btn btn-ban" id="addHwidBtn">Add HWID</button>
 </div>
 <div id=hwidList></div>
 </section>
 <section>
-<h2>🔑 Keys</h2>
-<div class=search><input id=search placeholder="Search key / HWID / IP / reason..." oninput=filterTable()></div>
+<h2>Keys</h2>
+<div class=search><input id=search placeholder="Search key / HWID / IP / reason..."></div>
 <table><thead><tr><th>Key</th><th>Tier</th><th>Status</th><th>Reason</th><th>HWID</th><th>IP</th><th>Activated</th><th>Actions</th></tr></thead>
 <tbody id=tbody>
 {% for k,d in keys.items() %}
@@ -301,24 +301,117 @@ tr:hover{background:#1c2128}
 <td>{{d.first_ip if d.first_ip else '-'}}</td>
 <td>{{d.activated_at[:10] if d.activated_at else '-'}}</td>
 <td>
-<button class="btn btn-reset" onclick='api("reset","{{k}}")'>Reset</button>
+<button class="btn btn-reset" data-action="reset" data-key="{{k}}">Reset</button>
 {% if d.banned %}
-<button class="btn btn-unban" onclick='api("unban","{{k}}")'>Unban</button>
+<button class="btn btn-unban" data-action="unban" data-key="{{k}}">Unban</button>
 {% else %}
-<button class="btn btn-ban" onclick='api("ban","{{k}}")'>Ban</button>
+<button class="btn btn-ban" data-action="ban" data-key="{{k}}">Ban</button>
 {% endif %}
 </td></tr>
 {% endfor %}
 </tbody></table>
 </section>
 <script>
-function filterTable(){var q=document.getElementById("search").value.toLowerCase();document.querySelectorAll("#tbody tr").forEach(function(r){r.style.display=r.innerText.toLowerCase().includes(q)?"":"none"})}
-function api(a,k){if(a==="reset"&&!confirm("Reset "+k+"?"))return;if(a==="ban"&&!confirm("Ban "+k+"?"))return;fetch("/api/admin/key/"+a,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({key:k})}).then(function(r){return r.json()}).then(function(d){if(d.status==="ok")location.reload();else alert(d.error||"Error")})}
-function loadHwids(){fetch("/api/admin/blacklist/hwid").then(function(r){return r.json()}).then(function(d){var el=document.getElementById("hwidList");if(!d.hwids||d.hwids.length===0){el.innerHTML="<span class=reason>No blacklisted HWIDs</span>";return}el.innerHTML=d.hwids.map(function(h){return"<span style='display:inline-block;background:#161b22;border:1px solid #30363d;border-radius:4px;padding:4px 8px;margin:3px;font-family:monospace;font-size:12px'>"+h+" <a href=# onclick='removeHwid(\""+h+"\");return false' style=color:#f85149;text-decoration:none>✕</a></span>"}).join("")})}
-function addHwid(){var v=document.getElementById("hwidInput").value.trim();if(!v)return;fetch("/api/admin/blacklist/hwid",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({hwid:v,action:"add"})}).then(function(r){return r.json()}).then(function(d){if(d.status==="ok"){document.getElementById("hwidInput").value="";loadHwids()}else alert(d.error||"Error")})}
-function removeHwid(h){if(!confirm("Remove HWID from blacklist?"))return;fetch("/api/admin/blacklist/hwid",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({hwid:h,action:"remove"})}).then(function(r){return r.json()}).then(function(d){if(d.status==="ok")loadHwids();else alert(d.error||"Error")})}
-loadHwids();
+function filterTable() {
+  var q = document.getElementById('search').value.toLowerCase();
+  document.querySelectorAll('#tbody tr').forEach(function(r) {
+    r.style.display = r.innerText.toLowerCase().includes(q) ? '' : 'none';
+  });
+}
+function api(a, k) {
+  if (a === 'reset' && !confirm('Reset ' + k + '?')) return;
+  if (a === 'ban' && !confirm('Ban ' + k + '?')) return;
+  fetch('/api/admin/key/' + a, {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({key: k})
+  })
+  .then(function(r) { return r.json(); })
+  .then(function(d) {
+    if (d.status === 'ok') location.reload();
+    else alert(d.error || 'Error');
+  });
+}
+function loadHwids() {
+  fetch('/api/admin/blacklist/hwid')
+  .then(function(r) { return r.json(); })
+  .then(function(d) {
+    var el = document.getElementById('hwidList');
+    if (!d.hwids || d.hwids.length === 0) {
+      el.innerHTML = '<span class=reason>No blacklisted HWIDs</span>';
+      return;
+    }
+    el.innerHTML = d.hwids.map(function(h) {
+      return '<span class="hwid-chip">' + h + ' <a href="#" data-hwid="' + h + '" class="rm-hwid">X</a></span>';
+    }).join('');
+  });
+}
+function addHwid() {
+  var v = document.getElementById('hwidInput').value.trim();
+  if (!v) return;
+  fetch('/api/admin/blacklist/hwid', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({hwid: v, action: 'add'})
+  })
+  .then(function(r) { return r.json(); })
+  .then(function(d) {
+    if (d.status === 'ok') {
+      document.getElementById('hwidInput').value = '';
+      loadHwids();
+    } else alert(d.error || 'Error');
+  });
+}
+function removeHwid(h) {
+  if (!confirm('Remove HWID from blacklist?')) return;
+  fetch('/api/admin/blacklist/hwid', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({hwid: h, action: 'remove'})
+  })
+  .then(function(r) { return r.json(); })
+  .then(function(d) {
+    if (d.status === 'ok') loadHwids();
+    else alert(d.error || 'Error');
+  });
+}
+document.addEventListener('DOMContentLoaded', function() {
+  document.getElementById('addHwidBtn').addEventListener('click', addHwid);
+  document.getElementById('search').addEventListener('input', filterTable);
+  document.getElementById('hwidList').addEventListener('click', function(e) {
+    if (e.target.classList.contains('rm-hwid')) {
+      e.preventDefault();
+      var hwid = e.target.getAttribute('data-hwid');
+      removeHwid(hwid);
+    }
+  });
+  document.getElementById('tbody').addEventListener('click', function(e) {
+    var btn = e.target.closest('button[data-action]');
+    if (!btn) return;
+    var action = btn.getAttribute('data-action');
+    var key = btn.getAttribute('data-key');
+    api(action, key);
+  });
+  loadHwids();
+});
 </script>
+<style>
+.hwid-chip {
+  display: inline-block;
+  background: #161b22;
+  border: 1px solid #30363d;
+  border-radius: 4px;
+  padding: 4px 8px;
+  margin: 3px;
+  font-family: monospace;
+  font-size: 12px;
+}
+.rm-hwid {
+  color: #f85149;
+  text-decoration: none;
+  margin-left: 4px;
+}
+</style>
 </body></html>"""
 
 
