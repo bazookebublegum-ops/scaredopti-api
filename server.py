@@ -1,6 +1,5 @@
-import os, json, threading, datetime, asyncio, difflib, traceback
+import os, json, threading, datetime, asyncio, difflib
 from datetime import datetime as dt, timedelta
-from typing import Optional
 
 import requests, aiohttp
 import discord
@@ -11,7 +10,7 @@ from flask import Flask, request, jsonify, render_template_string
 
 
 # ══════════════════════════════════════════════════════════════
-# ⚙️ КОНФИГУРАЦИЯ — МЕНЯЙ ЗДЕСЬ
+# ⚙️ КОНФИГУРАЦИЯ
 # ══════════════════════════════════════════════════════════════
 
 TOKEN = os.getenv("DISCORD_TOKEN")
@@ -20,70 +19,44 @@ PREFIX = "!"
 
 ADMIN_ROLE_ID = 1527423541538979972
 GUILD_ID = 1083127357818277938
-PANEL_CHANNEL_ID = 1518098248097595453
-MOD_CHANNEL_ID = 1522379284189282336
 PUBLIC_REVIEWS_CHANNEL_ID = 1517980239341424800
 DISCORD_WEBHOOK_URL = "https://discord.com/api/webhooks/1523045988401549396/NxEa66M65uPCdyN68E-pdv4byp7EehCxR0biNUt7ZaZ_XN7qPtkXC3zDyYhRB1LUlNEN"
 MASCOT_THUMBNAIL_URL = "https://i.imgur.com/your_mascot.png"
 BETA_DURATION_DAYS = 30
 KEYS_FILE = "keys.json"
 REVIEWS_FILE = "reviews.json"
+BLACKLISTED_HWIDS_FILE = "blacklisted_hwids.json"
+BRUTE_FORCE_LIMIT = 10
+BRUTE_FORCE_WINDOW_MIN = 10
+SERVER_URL = "https://scaredopti-api.onrender.com"
 
 
 # ══════════════════════════════════════════════════════════════
 # 🔐 БАЗА КЛЮЧЕЙ
 # ══════════════════════════════════════════════════════════════
 
-ALL_KEYS_DATA = {
-    "SCARED-BASIC-0GRF5A4M": "BASIC", "SCARED-BASIC-0MVAPYIX": "BASIC", "SCARED-BASIC-0P55CST0": "BASIC",
-    "SCARED-BASIC-0UPJ6X4H": "BASIC", "SCARED-BASIC-16FYFTFQ": "BASIC", "SCARED-BASIC-1KX1H92I": "BASIC",
-    "SCARED-BASIC-39VA4A62": "BASIC", "SCARED-BASIC-3DRANVCN": "BASIC", "SCARED-BASIC-53AF32WY": "BASIC",
-    "SCARED-BASIC-5TCSMO0W": "BASIC", "SCARED-BASIC-5ZX65IFA": "BASIC", "SCARED-BASIC-7BY9KLBA": "BASIC",
-    "SCARED-BASIC-7F969OL7": "BASIC", "SCARED-BASIC-7GIU1GUY": "BASIC", "SCARED-BASIC-7TWIKDSV": "BASIC",
-    "SCARED-BASIC-88050UMG": "BASIC", "SCARED-BASIC-8I0L9S1Y": "BASIC", "SCARED-BASIC-B6U9UEJF": "BASIC",
-    "SCARED-BASIC-B99CKJZ0": "BASIC", "SCARED-BASIC-CAU78JM9": "BASIC", "SCARED-BASIC-CERGLLHO": "BASIC",
-    "SCARED-BASIC-ED1AYH81": "BASIC", "SCARED-BASIC-EXFSSLHB": "BASIC", "SCARED-BASIC-EXGIMMN3": "BASIC",
-    "SCARED-BASIC-FJSNY16U": "BASIC", "SCARED-BASIC-G2SJ4AVQ": "BASIC", "SCARED-BASIC-G94PU2YO": "BASIC",
-    "SCARED-BASIC-GYLFJYWQ": "BASIC", "SCARED-BASIC-HG9LJYEW": "BASIC", "SCARED-BASIC-HO4I7JRF": "BASIC",
-    "SCARED-BASIC-HYKMDOZE": "BASIC", "SCARED-BASIC-I0YY22MP": "BASIC", "SCARED-BASIC-I2KKGZ7Y": "BASIC",
-    "SCARED-BASIC-IDU3649G": "BASIC", "SCARED-BASIC-IEAR3TKM": "BASIC", "SCARED-BASIC-JAP4LKQ7": "BASIC",
-    "SCARED-BASIC-LGWYVT61": "BASIC", "SCARED-BASIC-MHU0TIHC": "BASIC", "SCARED-BASIC-MRJNU1PJ": "BASIC",
-    "SCARED-BASIC-N5YCZ0G2": "BASIC", "SCARED-BASIC-NHQ0K4N7": "BASIC", "SCARED-BASIC-O4TGRRZ6": "BASIC",
-    "SCARED-BASIC-O6GV9ZJ1": "BASIC", "SCARED-BASIC-P3MQPS3O": "BASIC", "SCARED-BASIC-PMZJME7A": "BASIC",
-    "SCARED-BASIC-Q0XE3ZJL": "BASIC", "SCARED-BASIC-Q60ORSWJ": "BASIC", "SCARED-BASIC-SIY657E3": "BASIC",
-    "SCARED-BASIC-SLSRV5EV": "BASIC", "SCARED-BASIC-SPHHRT5Z": "BASIC", "SCARED-BASIC-TB1YJ3KV": "BASIC",
-    "SCARED-BASIC-TFVVX548": "BASIC", "SCARED-BASIC-U6GB3KOY": "BASIC", "SCARED-BASIC-V5Z15U46": "BASIC",
-    "SCARED-BASIC-V9RPP3FY": "BASIC", "SCARED-BASIC-VV7IP3O1": "BASIC", "SCARED-BASIC-XLZQDCKM": "BASIC",
-    "SCARED-BASIC-Z9Q2FXE7": "BASIC", "SCARED-BASIC-ZIMZNHJR": "BASIC", "SCARED-BASIC-ZT0JRIYO": "BASIC",
-    "SCARED-PREM-01LEM9O1": "PREMIUM", "SCARED-PREM-0FBM2MPP": "PREMIUM", "SCARED-PREM-107RQOJ1": "PREMIUM",
-    "SCARED-PREM-10LN3WBH": "PREMIUM", "SCARED-PREM-1CKMM6R7": "PREMIUM", "SCARED-PREM-1MZIFYIK": "PREMIUM",
-    "SCARED-PREM-3027OZNN": "PREMIUM", "SCARED-PREM-329P0GOA": "PREMIUM", "SCARED-PREM-3PSYL9FS": "PREMIUM",
-    "SCARED-PREM-40YBBXCE": "PREMIUM", "SCARED-PREM-46XTOAMS": "PREMIUM", "SCARED-PREM-4BZPTGJ3": "PREMIUM",
-    "SCARED-PREM-4J9L0ARQ": "PREMIUM", "SCARED-PREM-53HEFPAW": "PREMIUM", "SCARED-PREM-6BVERWWU": "PREMIUM",
-    "SCARED-PREM-6HKXW9S3": "PREMIUM", "SCARED-PREM-7C9OBUS0": "PREMIUM", "SCARED-PREM-AFGB3VQI": "PREMIUM",
-    "SCARED-PREM-AHAA21MF": "PREMIUM", "SCARED-PREM-AJH2HHRE": "PREMIUM", "SCARED-PREM-CT055VX9": "PREMIUM",
-    "SCARED-PREM-EGGURNEY": "PREMIUM", "SCARED-PREM-F38KD12Z": "PREMIUM", "SCARED-PREM-F7U9VNZF": "PREMIUM",
-    "SCARED-PREM-G3HJ1UBF": "PREMIUM", "SCARED-PREM-IIHRFPQV": "PREMIUM", "SCARED-PREM-JG6G8V42": "PREMIUM",
-    "SCARED-PREM-JNCWF97A": "PREMIUM", "SCARED-PREM-K3SP5MWO": "PREMIUM", "SCARED-PREM-KEN8FDS8": "PREMIUM",
-    "SCARED-PREM-KGVM7TBN": "PREMIUM", "SCARED-PREM-KJY3WDUE": "PREMIUM", "SCARED-PREM-KO68N7SD": "PREMIUM",
-    "SCARED-PREM-LL2M2Q5C": "PREMIUM", "SCARED-PREM-M8Y7FF8O": "PREMIUM", "SCARED-PREM-OE53FDZ9": "PREMIUM",
-    "SCARED-PREM-QSI9HVC5": "PREMIUM", "SCARED-PREM-QU6VA5BJ": "PREMIUM", "SCARED-PREM-SZANYS01": "PREMIUM",
-    "SCARED-PREM-TGRWR6TF": "PREMIUM", "SCARED-PREM-THPZLWMV": "PREMIUM", "SCARED-PREM-U5VXE1KR": "PREMIUM",
-    "SCARED-PREM-UPFODCFH": "PREMIUM", "SCARED-PREM-VASUPEW2": "PREMIUM", "SCARED-PREM-VSKC4FV4": "PREMIUM",
-    "SCARED-PREM-VUJBV74K": "PREMIUM", "SCARED-PREM-VXECK2LR": "PREMIUM", "SCARED-PREM-W2JPAW11": "PREMIUM",
-    "SCARED-PREM-WLJOV9NV": "PREMIUM", "SCARED-PREM-X1L9H8TS": "PREMIUM", "SCARED-PREM-XC27B7YC": "PREMIUM",
-    "SCARED-PREM-XEG1S1OD": "PREMIUM", "SCARED-PREM-XMT2J7HZ": "PREMIUM", "SCARED-PREM-XOZ3WSIU": "PREMIUM",
-    "SCARED-PREM-XWQ28MKC": "PREMIUM", "SCARED-PREM-YB2JXI6A": "PREMIUM", "SCARED-PREM-YJUMV7LT": "PREMIUM",
-    "SCARED-PREM-YO2EMVKN": "PREMIUM", "SCARED-PREM-ZR3SGYI0": "PREMIUM", "SCARED-PREM-ZUVBT0RX": "PREMIUM",
-    "SCARED-OWNER-GODMODE": "OWNER", "SCARED-OWNER-ALPHA01": "OWNER",
-    "SCARED-OWNER-BETA002": "OWNER", "SCARED-OWNER-DELTA03": "OWNER",
-}
+KEYS_PREFIX = "SCARED"
+
+ALL_KEYS_DATA = {}
+_basic = ["0GRF5A4M","0MVAPYIX","0P55CST0","0UPJ6X4H","16FYFTFQ","1KX1H92I","39VA4A62","3DRANVCN","53AF32WY","5TCSMO0W","5ZX65IFA","7BY9KLBA","7F969OL7","7GIU1GUY","7TWIKDSV","88050UMG","8I0L9S1Y","B6U9UEJF","B99CKJZ0","CAU78JM9","CERGLLHO","ED1AYH81","EXFSSLHB","EXGIMMN3","FJSNY16U","G2SJ4AVQ","G94PU2YO","GYLFJYWQ","HG9LJYEW","HO4I7JRF","HYKMDOZE","I0YY22MP","I2KKGZ7Y","IDU3649G","IEAR3TKM","JAP4LKQ7","LGWYVT61","MHU0TIHC","MRJNU1PJ","N5YCZ0G2","NHQ0K4N7","O4TGRRZ6","O6GV9ZJ1","P3MQPS3O","PMZJME7A","Q0XE3ZJL","Q60ORSWJ","SIY657E3","SLSRV5EV","SPHHRT5Z","TB1YJ3KV","TFVVX548","U6GB3KOY","V5Z15U46","V9RPP3FY","VV7IP3O1","XLZQDCKM","Z9Q2FXE7","ZIMZNHJR","ZT0JRIYO"]
+_prem = ["01LEM9O1","0FBM2MPP","107RQOJ1","10LN3WBH","1CKMM6R7","1MZIFYIK","3027OZNN","329P0GOA","3PSYL9FS","40YBBXCE","46XTOAMS","4BZPTGJ3","4J9L0ARQ","53HEFPAW","6BVERWWU","6HKXW9S3","7C9OBUS0","AFGB3VQI","AHAA21MF","AJH2HHRE","CT055VX9","EGGURNEY","F38KD12Z","F7U9VNZF","G3HJ1UBF","IIHRFPQV","JG6G8V42","JNCWF97A","K3SP5MWO","KEN8FDS8","KGVM7TBN","KJY3WDUE","KO68N7SD","LL2M2Q5C","M8Y7FF8O","OE53FDZ9","QSI9HVC5","QU6VA5BJ","SZANYS01","TGRWR6TF","THPZLWMV","U5VXE1KR","UPFODCFH","VASUPEW2","VSKC4FV4","VUJBV74K","VXECK2LR","W2JPAW11","WLJOV9NV","X1L9H8TS","XC27B7YC","XEG1S1OD","XMT2J7HZ","XOZ3WSIU","XWQ28MKC","YB2JXI6A","YJUMV7LT","YO2EMVKN","ZR3SGYI0","ZUVBT0RX"]
+_owner = ["GODMODE","ALPHA01","BETA002","DELTA03"]
+
+for s in _basic: ALL_KEYS_DATA[f"{KEYS_PREFIX}-BASIC-{s}"] = "BASIC"
+for s in _prem: ALL_KEYS_DATA[f"{KEYS_PREFIX}-PREM-{s}"] = "PREMIUM"
+for s in _owner: ALL_KEYS_DATA[f"{KEYS_PREFIX}-OWNER-{s}"] = "OWNER"
 
 
 def load_keys():
     if os.path.exists(KEYS_FILE):
         with open(KEYS_FILE, 'r') as f:
-            return json.load(f)
+            raw = json.load(f)
+            migrated = {}
+            for k, v in raw.items():
+                for old_prefix in ("SKYEREV-", "SCARED-"):
+                    k = k.replace(old_prefix, f"{KEYS_PREFIX}-")
+                migrated[k] = v
+            return migrated
     return {}
 
 
@@ -98,8 +71,7 @@ if not keys:
         keys[key] = {
             "used": False, "tier": tier, "hwid": None,
             "first_ip": None, "activated_at": None,
-            "last_login_at": None, "expires_at": None,
-            "banned": False, "ban_reason": None
+            "last_login_at": None, "banned": False, "ban_reason": None
         }
     save_keys()
     print(f"[OK] Initialized {len(keys)} keys")
@@ -113,96 +85,58 @@ def send_discord_alert(title, description, color=0xFF0000):
             "embeds": [{
                 "title": title, "description": description, "color": color,
                 "timestamp": dt.now().isoformat(),
-                "footer": {"text": "Scared Opti Security System"}
+                "footer": {"text": "ScaredOpti Security"}
             }]
         }
         requests.post(DISCORD_WEBHOOK_URL, json=payload, timeout=5)
     except Exception as e:
-        print(f"[DISCORD ERROR] {e}")
+        print(f"[WEBHOOK ERROR] {e}")
+
+
+# brute-force tracker
+brute_force_tracker: dict = {}  # ip -> list of timestamps
+
+
+def load_blacklisted_hwids():
+    if os.path.exists(BLACKLISTED_HWIDS_FILE):
+        with open(BLACKLISTED_HWIDS_FILE, "r") as f:
+            return set(json.load(f))
+    return set()
+
+
+def save_blacklisted_hwids():
+    with open(BLACKLISTED_HWIDS_FILE, "w") as f:
+        json.dump(list(blacklisted_hwids), f)
+
+
+blacklisted_hwids = load_blacklisted_hwids()
+
+
+def is_bruteforce(ip):
+    now = dt.now()
+    window = timedelta(minutes=BRUTE_FORCE_WINDOW_MIN)
+    attempts = brute_force_tracker.get(ip, [])
+    attempts = [t for t in attempts if now - t < window]
+    brute_force_tracker[ip] = attempts
+    return len(attempts) >= BRUTE_FORCE_LIMIT
+
+
+def record_failed_attempt(ip):
+    if ip not in brute_force_tracker:
+        brute_force_tracker[ip] = []
+    brute_force_tracker[ip].append(dt.now())
 
 
 # ══════════════════════════════════════════════════════════════
-# 🎨 FLASK — АДМИНКА + API
+# 🎨 FLASK — API АКТИВАЦИИ
 # ══════════════════════════════════════════════════════════════
 
 app = Flask(__name__)
 
-ADMIN_HTML = """<!DOCTYPE html><html lang="ru"><head><meta charset="UTF-8"><title>Scared Opti Admin</title>
-<style>
-:root{--bg:#0a0a0a;--text:#e0e0e0;--surface:#141414;--border:#2a2a2a;--muted:#666;--success:#4ade80;--warning:#fbbf24;--danger:#ef4444;}
-*{margin:0;padding:0;box-sizing:border-box;font-family:'Courier New',monospace;}
-body{background:var(--bg);color:var(--text);padding:40px;min-height:100vh;}
-.container{max-width:1200px;margin:0 auto;}
-header{border-bottom:1px solid var(--border);padding-bottom:20px;margin-bottom:40px;display:flex;justify-content:space-between;align-items:center;}
-h1{font-size:24px;font-weight:normal;letter-spacing:2px;text-transform:uppercase;}
-.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:20px;margin-bottom:40px;}
-.stat{background:var(--surface);border:1px solid var(--border);padding:20px;}
-.stat-label{font-size:10px;color:var(--muted);text-transform:uppercase;margin-bottom:8px;}
-.stat-value{font-size:28px;font-weight:bold;}
-.add-form{display:flex;gap:10px;margin-bottom:40px;}
-input,select,button{background:var(--surface);border:1px solid var(--border);color:var(--text);padding:12px 16px;font-family:inherit;font-size:12px;outline:none;}
-input{flex:1;}button{cursor:pointer;text-transform:uppercase;transition:all 0.2s;}
-button:hover{background:var(--text);color:var(--bg);}
-table{width:100%;border-collapse:collapse;}
-th{text-align:left;padding:12px;border-bottom:1px solid var(--border);font-size:10px;color:var(--muted);text-transform:uppercase;font-weight:normal;cursor:pointer;user-select:none;}
-th:hover{color:var(--text);}
-td{padding:16px 12px;border-bottom:1px solid var(--border);font-size:12px;}
-tr:hover{background:rgba(255,255,255,0.02);}
-.badge{padding:2px 8px;font-size:10px;text-transform:uppercase;border:1px solid;}
-.badge-basic{border-color:#444;color:#888;}
-.badge-premium{border-color:var(--warning);color:var(--warning);}
-.badge-owner{border-color:var(--danger);color:var(--danger);}
-.status-active{color:var(--success);font-weight:bold;}
-.status-sharing{color:var(--danger);font-weight:bold;text-decoration:underline;}
-.status-ipchange{color:var(--warning);font-weight:bold;}
-.status-banned{color:#ff4444;}
-.status-unused{color:var(--muted);}
-.actions{display:flex;gap:8px;}
-.btn-sm{padding:4px 12px;font-size:10px;border:1px solid var(--border);background:transparent;color:var(--muted);}
-.btn-sm:hover{background:var(--text);color:var(--bg);}
-.btn-danger:hover{background:var(--danger);color:#fff;border-color:var(--danger);}
-.sort-arrow{margin-left:5px;font-size:8px;}
-</style></head><body>
-<div class="container">
-<header><h1>Scared Opti // Admin</h1><div style="font-size:10px;color:var(--muted);">v2.5 COMBINED SERVICE</div></header>
-<div class="stats"><div class="stat"><div class="stat-label">Total Keys</div><div class="stat-value" id="total">0</div></div><div class="stat"><div class="stat-label">Active</div><div class="stat-value" id="active">0</div></div><div class="stat"><div class="stat-label">Sharing Ban</div><div class="stat-value" id="sharing" style="color:var(--danger)">0</div></div><div class="stat"><div class="stat-label">Unused</div><div class="stat-value" id="unused">0</div></div></div>
-<div class="add-form"><input type="text" id="newKey" placeholder="SCARED-TIER-XXXXXXXX"><select id="newTier"><option value="BASIC">BASIC</option><option value="PREMIUM">PREMIUM</option><option value="OWNER">OWNER</option></select><button onclick="addKey()">Add Key</button></div>
-<table><thead><tr><th onclick="sortTable('key')">Key <span class="sort-arrow" id="arrow-key"></span></th><th onclick="sortTable('tier')">Tier <span class="sort-arrow" id="arrow-tier"></span></th><th onclick="sortTable('status')">Status <span class="sort-arrow" id="arrow-status"></span></th><th>HWID</th><th>IP</th><th onclick="sortTable('activated_at')">Activated <span class="sort-arrow" id="arrow-activated_at"></span></th><th>Actions</th></tr></thead><tbody id="keysTable"></tbody></table></div>
-<script>
-let allKeysData=[];let sortField='status';let sortAsc=true;
-async function load(){const r=await fetch('/api/admin/keys');const d=await r.json();allKeysData=d.keys;
-document.getElementById('total').textContent=d.stats.total;document.getElementById('active').textContent=d.stats.active;
-document.getElementById('sharing').textContent=d.stats.sharing;document.getElementById('unused').textContent=d.stats.unused;renderTable();}
-function sortTable(f){if(sortField===f)sortAsc=!sortAsc;else{sortField=f;sortAsc=true;}
-document.querySelectorAll('.sort-arrow').forEach(a=>a.textContent='');document.getElementById('arrow-'+f).textContent=sortAsc?'▲':'▼';renderTable();}
-function getStatusDisplay(k){if(!k.used&&!k.banned)return'<span class="status-unused">UNUSED</span>';if(k.banned&&k.ban_reason==='SHARING')return'<span class="status-sharing">🚫 SHARING</span>';if(k.banned&&k.ban_reason==='IP_CHANGE')return'<span class="status-ipchange">🌐 IP CHANGE</span>';if(k.banned)return'<span class="status-banned">⛔ BANNED</span>';return'<span class="status-active">✅ ACTIVE</span>';}
-function getSortValue(k){if(k.banned&&k.ban_reason==='SHARING')return 0;if(k.banned)return 1;return 4;}
-function renderTable(){let filtered=allKeysData;filtered.sort((a,b)=>{if(sortField==='status'){let vA=getSortValue(a);let vB=getSortValue(b);return sortAsc?vA-vB:vB-vA;}
-let vA=a[sortField]||'';let vB=b[sortField]||'';if(vA<vB)return sortAsc?-1:1;if(vA>vB)return sortAsc?1:-1;return 0;});
-document.getElementById('keysTable').innerHTML=filtered.map(k=>`
-<tr style="${k.banned?'opacity:0.6':''}"><td style="font-family:monospace">${k.key}</td>
-<td><span class="badge badge-${k.tier.toLowerCase()}">${k.tier}</span></td>
-<td>${getStatusDisplay(k)}</td>
-<td style="font-size:10px">${k.hwid?k.hwid.substring(0,12)+'...':'-'}</td>
-<td>${k.first_ip||'-'}</td>
-<td>${k.activated_at?new Date(k.activated_at).toLocaleString():'-'}</td>
-<td class="actions">${k.banned?`<button class="btn-sm" onclick="unban('${k.key}')">Unban</button>`:`<button class="btn-sm btn-danger" onclick="ban('${k.key}')">Ban</button>`}<button class="btn-sm btn-danger" onclick="del('${k.key}')">Del</button></td></tr>`).join('');}
-async function addKey(){const key=document.getElementById('newKey').value.trim().toUpperCase();const tier=document.getElementById('newTier').value;if(!key)return;await fetch('/api/admin/add',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({key,tier})});document.getElementById('newKey').value='';load();}
-async function ban(key){await fetch('/api/admin/ban',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({key,reason:'MANUAL'})});load();}
-async function unban(key){await fetch('/api/admin/unban',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({key})});load();}
-async function del(key){if(confirm('Delete '+key+'?')){await fetch('/api/admin/delete',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({key})});load();}}
-load();setInterval(load,5000);
-</script></body></html>"""
-
-
-@app.route("/")
-def home():
-    return render_template_string(ADMIN_HTML)
-
 
 @app.route("/health")
 def health():
-    return jsonify({"status": "ok", "service": "combined"})
+    return jsonify({"status": "ok", "service": "scaredopti"})
 
 
 @app.route("/activate", methods=["POST"])
@@ -212,31 +146,34 @@ def activate():
     hwid = data.get("hwid", "").strip()
     client_ip = request.remote_addr
 
+    # brute-force check first
+    if is_bruteforce(client_ip):
+        return jsonify({"status": "bruteforce_blocked", "message": "Too many failed attempts. Try again later."})
+
+    # HWID blacklist check
+    if hwid and hwid in blacklisted_hwids:
+        record_failed_attempt(client_ip)
+        return jsonify({"status": "hwid_blacklisted", "message": "Your hardware is blacklisted."})
+
     if not key or key not in keys:
+        record_failed_attempt(client_ip)
         return jsonify({"status": "invalid", "message": "Invalid key"})
 
     k = keys[key]
     if k.get("banned"):
         return jsonify({"status": "banned", "message": f"KEY BANNED ({k.get('ban_reason', 'UNKNOWN')}). Contact support."})
 
-    if k.get("expires_at"):
-        try:
-            if dt.now() > dt.fromisoformat(k["expires_at"]):
-                return jsonify({"status": "expired", "message": "License expired"})
-        except:
-            pass
+    # permanent keys — no expiry check
 
     if not k["used"]:
-        now = dt.now()
-        expires = now + timedelta(days=BETA_DURATION_DAYS)
         k.update({
             "used": True, "hwid": hwid, "first_ip": client_ip,
-            "activated_at": now.isoformat(), "last_login_at": now.isoformat(),
-            "expires_at": expires.isoformat(), "banned": False, "ban_reason": None
+            "activated_at": dt.now().isoformat(), "last_login_at": dt.now().isoformat(),
+            "banned": False, "ban_reason": None
         })
         save_keys()
         send_discord_alert("✅ New Activation", f"**Key:** `{key}`\n**Tier:** {k['tier']}\n**IP:** {client_ip}\n**HWID:** `{hwid[:12]}...`", color=0x00FF00)
-        return jsonify({"status": "ok", "tier": k["tier"], "expires_at": int(expires.timestamp())})
+        return jsonify({"status": "ok", "tier": k["tier"]})
 
     if k["hwid"] != hwid:
         k["banned"] = True; k["ban_reason"] = "SHARING"; save_keys()
@@ -265,13 +202,7 @@ def activate():
     if notify:
         send_discord_alert("🔑 Successful Login", f"**Key:** `{key}` ({k['tier']})\n**IP:** {client_ip}\n**HWID:** `{hwid[:12]}...`", color=0x0088FF)
 
-    exp_ts = 0
-    if k.get("expires_at"):
-        try:
-            exp_ts = int(dt.fromisoformat(k["expires_at"]).timestamp())
-        except:
-            pass
-    return jsonify({"status": "ok", "tier": k["tier"], "expires_at": exp_ts})
+    return jsonify({"status": "ok", "tier": k["tier"]})
 
 
 @app.route("/api/admin/keys")
@@ -297,53 +228,191 @@ def admin_keys():
     return jsonify({"keys": keys_list, "stats": stats})
 
 
-@app.route("/api/admin/add", methods=["POST"])
-def admin_add():
-    d = request.json
-    if d["key"] in keys:
-        return jsonify({"status": "error"})
-    keys[d["key"]] = {
-        "used": False, "tier": d["tier"], "hwid": None, "first_ip": None,
-        "activated_at": None, "last_login_at": None, "expires_at": None,
-        "banned": False, "ban_reason": None
-    }
+ADMIN_HTML = """<!DOCTYPE html>
+<html lang=ru><head><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1">
+<title>ScaredOpti Admin</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:system-ui,sans-serif;background:#0d1117;color:#c9d1d9;padding:20px}
+h1{color:#58a6ff;margin-bottom:20px}
+.stats{display:flex;gap:15px;flex-wrap:wrap;margin-bottom:25px}
+.stat{background:#161b22;border:1px solid #30363d;border-radius:8px;padding:15px 25px;min-width:120px}
+.stat .n{font-size:28px;font-weight:700}
+.stat .l{font-size:12px;color:#8b949e;margin-top:4px}
+.stat.green .n{color:#3fb950}
+.stat.red .n{color:#f85149}
+.stat.orange .n{color:#d29922}
+.stat.blue .n{color:#58a6ff}
+section{margin-bottom:30px}
+section h2{color:#58a6ff;font-size:18px;margin-bottom:12px}
+.search{margin-bottom:15px}
+.search input{background:#0d1117;border:1px solid #30363d;color:#c9d1d9;padding:8px 12px;border-radius:6px;width:300px}
+table{width:100%;border-collapse:collapse;background:#161b22;border:1px solid #30363d;border-radius:8px;overflow:hidden}
+th,td{padding:8px 12px;text-align:left;border-bottom:1px solid #30363d;font-size:13px}
+th{background:#21262d;color:#8b949e;font-weight:600}
+tr:hover{background:#1c2128}
+.key{font-family:monospace;font-size:12px;color:#58a6ff}
+.status-dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:6px}
+.dot-green{background:#3fb950}
+.dot-red{background:#f85149}
+.dot-yellow{background:#d29922}
+.dot-gray{background:#484f58}
+.btn{padding:4px 10px;border-radius:6px;border:1px solid;cursor:pointer;font-size:12px;background:0 0;color:#c9d1d9;margin:0 2px}
+.btn-reset{border-color:#d29922;color:#d29922}
+.btn-ban{border-color:#f85149;color:#f85149}
+.btn-unban{border-color:#3fb950;color:#3fb950}
+.tier-basic{color:#8b949e}
+.tier-premium{color:#d29922}
+.tier-owner{color:#f85149}
+.reason{font-size:11px;color:#8b949e}
+.blacklist-box{display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap}
+.blacklist-box input{background:#0d1117;border:1px solid #30363d;color:#c9d1d9;padding:8px 12px;border-radius:6px;width:300px}
+.blacklist-box button{border-color:#f85149;color:#f85149}
+</style></head>
+<body>
+<h1>🔐 ScaredOpti Admin</h1>
+<div class=stats>
+<div class=stat blue><div class=n>{{stats.total}}</div><div class=l>Total</div></div>
+<div class=stat green><div class=n>{{stats.active}}</div><div class=l>Active</div></div>
+<div class=stat orange><div class=n>{{stats.sharing}}</div><div class=l>Sharing</div></div>
+<div class=stat red><div class=n>{{stats.banned}}</div><div class=l>Banned</div></div>
+<div class=stat><div class=n>{{stats.unused}}</div><div class=l>Unused</div></div>
+</div>
+<section>
+<h2>🖥️ HWID Blacklist</h2>
+<div class=blacklist-box>
+<input id=hwidInput placeholder="HWID to blacklist...">
+<button class="btn btn-ban" onclick=addHwid()>Add HWID</button>
+</div>
+<div id=hwidList></div>
+</section>
+<section>
+<h2>🔑 Keys</h2>
+<div class=search><input id=search placeholder="Search key / HWID / IP / reason..." oninput=filterTable()></div>
+<table><thead><tr><th>Key</th><th>Tier</th><th>Status</th><th>Reason</th><th>HWID</th><th>IP</th><th>Activated</th><th>Actions</th></tr></thead>
+<tbody id=tbody>
+{% for k,d in keys.items() %}
+<tr>
+<td class=key>{{k}}</td>
+<td class="tier-{{d.tier.lower()}}">{{d.tier}}</td>
+<td>{% if d.banned %}<span class=status-dot.dot-red></span>BANNED{% elif d.used %}<span class=status-dot.dot-green></span>Active{% else %}<span class=status-dot.dot-gray></span>Unused{% endif %}</td>
+<td class=reason>{{d.ban_reason if d.ban_reason else '-'}}</td>
+<td>{{d.hwid[:16] if d.hwid else '-'}}</td>
+<td>{{d.first_ip if d.first_ip else '-'}}</td>
+<td>{{d.activated_at[:10] if d.activated_at else '-'}}</td>
+<td>
+<button class="btn btn-reset" onclick='api("reset","{{k}}")'>Reset</button>
+{% if d.banned %}
+<button class="btn btn-unban" onclick='api("unban","{{k}}")'>Unban</button>
+{% else %}
+<button class="btn btn-ban" onclick='api("ban","{{k}}")'>Ban</button>
+{% endif %}
+</td></tr>
+{% endfor %}
+</tbody></table>
+</section>
+<script>
+function filterTable(){var q=document.getElementById("search").value.toLowerCase();document.querySelectorAll("#tbody tr").forEach(function(r){r.style.display=r.innerText.toLowerCase().includes(q)?"":"none"})}
+function api(a,k){if(a==="reset"&&!confirm("Reset "+k+"?"))return;if(a==="ban"&&!confirm("Ban "+k+"?"))return;fetch("/api/admin/key/"+a,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({key:k})}).then(function(r){return r.json()}).then(function(d){if(d.status==="ok")location.reload();else alert(d.error||"Error")})}
+function loadHwids(){fetch("/api/admin/blacklist/hwid").then(function(r){return r.json()}).then(function(d){var el=document.getElementById("hwidList");if(!d.hwids||d.hwids.length===0){el.innerHTML="<span class=reason>No blacklisted HWIDs</span>";return}el.innerHTML=d.hwids.map(function(h){return"<span style='display:inline-block;background:#161b22;border:1px solid #30363d;border-radius:4px;padding:4px 8px;margin:3px;font-family:monospace;font-size:12px'>"+h+" <a href=# onclick='removeHwid(\""+h+"\");return false' style=color:#f85149;text-decoration:none>✕</a></span>"}).join("")})}
+function addHwid(){var v=document.getElementById("hwidInput").value.trim();if(!v)return;fetch("/api/admin/blacklist/hwid",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({hwid:v,action:"add"})}).then(function(r){return r.json()}).then(function(d){if(d.status==="ok"){document.getElementById("hwidInput").value="";loadHwids()}else alert(d.error||"Error")})}
+function removeHwid(h){if(!confirm("Remove HWID from blacklist?"))return;fetch("/api/admin/blacklist/hwid",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({hwid:h,action:"remove"})}).then(function(r){return r.json()}).then(function(d){if(d.status==="ok")loadHwids();else alert(d.error||"Error")})}
+loadHwids();
+</script>
+</body></html>"""
+
+
+@app.route("/admin")
+def admin_panel():
+    stats = {"total": 0, "active": 0, "banned": 0, "sharing": 0, "unused": 0}
+    for data in keys.values():
+        stats["total"] += 1
+        if data["used"] and not data["banned"]:
+            stats["active"] += 1
+        elif data["banned"] and data.get("ban_reason") == "SHARING":
+            stats["sharing"] += 1
+        elif data["banned"]:
+            stats["banned"] += 1
+        else:
+            stats["unused"] += 1
+
+    return render_template_string(ADMIN_HTML, stats=stats, keys=keys)
+
+
+@app.route("/api/admin/key/reset", methods=["POST"])
+def admin_key_reset():
+    key = request.json.get("key", "").strip().upper()
+    if key not in keys:
+        return jsonify({"error": "Key not found"}), 404
+    keys[key].update({"used": False, "hwid": None, "first_ip": None,
+                       "activated_at": None, "last_login_at": None,
+                       "expires_at": None, "banned": False, "ban_reason": None})
     save_keys()
+    send_discord_alert("🔄 Key Reset", f"**Key:** `{key}` ({keys[key]['tier']})", 0xFFA500)
     return jsonify({"status": "ok"})
 
 
-@app.route("/api/admin/ban", methods=["POST"])
-def admin_ban():
-    k = request.json["key"]
+@app.route("/api/admin/key/ban", methods=["POST"])
+def admin_key_ban():
+    key = request.json.get("key", "").strip().upper()
     reason = request.json.get("reason", "MANUAL")
-    if k in keys:
-        keys[k]["banned"] = True
-        keys[k]["ban_reason"] = reason
-        save_keys()
+    if key not in keys:
+        return jsonify({"error": "Key not found"}), 404
+    keys[key].update({"banned": True, "ban_reason": reason})
+    save_keys()
+    send_discord_alert("⛔ Key Banned", f"**Key:** `{key}` ({keys[key]['tier']})\n**Reason:** {reason}", 0xFF0000)
     return jsonify({"status": "ok"})
 
 
-@app.route("/api/admin/unban", methods=["POST"])
-def admin_unban():
-    k = request.json["key"]
-    if k in keys:
-        keys[k]["banned"] = False
-        keys[k]["ban_reason"] = None
-        save_keys()
+@app.route("/api/admin/key/unban", methods=["POST"])
+def admin_key_unban():
+    key = request.json.get("key", "").strip().upper()
+    if key not in keys:
+        return jsonify({"error": "Key not found"}), 404
+    keys[key].update({"banned": False, "ban_reason": None})
+    save_keys()
+    send_discord_alert("✅ Key Unbanned", f"**Key:** `{key}` ({keys[key]['tier']})", 0x00FF00)
     return jsonify({"status": "ok"})
 
 
-@app.route("/api/admin/delete", methods=["POST"])
-def admin_del():
-    k = request.json["key"]
-    if k in keys:
-        del keys[k]
-        save_keys()
+@app.route("/api/admin/key/extend", methods=["POST"])
+def admin_key_extend():
+    key = request.json.get("key", "").strip().upper()
+    days = int(request.json.get("days", 30))
+    if key not in keys:
+        return jsonify({"error": "Key not found"}), 404
+    try:
+        cur = dt.fromisoformat(keys[key]["expires_at"]) if keys[key].get("expires_at") else dt.now()
+    except:
+        cur = dt.now()
+    keys[key]["expires_at"] = (cur + timedelta(days=days)).isoformat()
+    if not keys[key]["used"]:
+        keys[key]["used"] = True
+        keys[key]["activated_at"] = keys[key].get("activated_at") or dt.now().isoformat()
+    save_keys()
+    return jsonify({"status": "ok", "expires_at": keys[key]["expires_at"]})
+
+
+@app.route("/api/admin/blacklist/hwid", methods=["GET", "POST"])
+def admin_blacklist_hwid():
+    if request.method == "GET":
+        return jsonify({"hwids": list(blacklisted_hwids)})
+    data = request.json
+    hwid = data.get("hwid", "").strip()
+    action = data.get("action", "add")
+    if not hwid:
+        return jsonify({"error": "No HWID"}), 400
+    if action == "add":
+        blacklisted_hwids.add(hwid)
+    elif action == "remove":
+        blacklisted_hwids.discard(hwid)
+    save_blacklisted_hwids()
     return jsonify({"status": "ok"})
 
 
 def run_flask():
     port = int(os.environ.get("PORT", 10000))
-    print(f"[+] Flask admin on port {port}")
+    print(f"[+] API server on port {port}")
     app.run(host="0.0.0.0", port=port, debug=False, use_reloader=False)
 
 
@@ -357,7 +426,7 @@ bot.owner_id = OWNER_ID
 
 
 # ══════════════════════════════════════════════════════════════
-# ⭐ СИСТЕМА ОТЗЫВОВ (REVIEWS)
+# ⭐ СИСТЕМА ОТЗЫВОВ
 # ══════════════════════════════════════════════════════════════
 
 def load_reviews():
@@ -377,15 +446,6 @@ def save_review(entry):
         json.dump(data, f, ensure_ascii=False, indent=2)
 
 
-def update_review_status(review_id, status):
-    data = load_reviews()
-    for r in data:
-        if r.get("id") == review_id:
-            r["status"] = status
-    with open(REVIEWS_FILE, "w", encoding="utf-8") as f:
-        json.dump(data, f, ensure_ascii=False, indent=2)
-
-
 class LicenseResult:
     def __init__(self, valid: bool, reason: str = "", tier: str = ""):
         self.valid = valid
@@ -397,39 +457,34 @@ async def check_license(key):
     normalized = key.strip().upper()
     try:
         async with aiohttp.ClientSession() as session:
-            async with session.get(
-                f"http://127.0.0.1:{os.environ.get('PORT', 10000)}/api/admin/keys",
+            async with session.post(
+                f"{SERVER_URL}/activate",
+                json={"key": normalized, "hwid": "discord_bot_check"},
                 timeout=aiohttp.ClientTimeout(total=10)
             ) as resp:
                 if resp.status != 200:
                     return LicenseResult(False, reason=f"api_error_{resp.status}")
                 data = await resp.json()
+                if data.get("status") == "ok":
+                    return LicenseResult(True, tier=data.get("tier", ""))
+                if data.get("status") == "expired":
+                    return LicenseResult(False, reason="expired")
+                if data.get("status") == "banned":
+                    return LicenseResult(False, reason="banned_unknown")
+                return LicenseResult(False, reason=data.get("message", "invalid_key"))
     except Exception as e:
         return LicenseResult(False, reason=f"connection_error: {e}")
 
-    entry = None
-    for k in data.get("keys", []):
-        if str(k.get("key", "")).upper() == normalized:
-            entry = k
-            break
-    if entry is None:
-        return LicenseResult(False, reason="invalid_key")
-    if entry.get("banned"):
-        return LicenseResult(False, reason=f"banned_{(entry.get('ban_reason') or 'unknown').lower()}")
-    if not entry.get("used"):
-        return LicenseResult(False, reason="unused")
-    return LicenseResult(True, tier=entry.get("tier", ""))
-
 
 REASON_TEXT = {
-    "invalid_key": "❌ Ключ не найден.",
+    "invalid_key": "❌ Ключ не найден в базе.",
     "unused": "⚠️ Ключ ещё не активирован — сначала запусти прогу.",
     "banned_sharing": "🚫 Ключ заблокирован за шаринг.",
     "banned_ip_change": "🌐 Ключ заблокирован из-за смены IP.",
     "banned_manual": "⛔ Ключ заблокирован вручную.",
     "banned_unknown": "⛔ Ключ заблокирован.",
+    "expired": "⏰ Срок действия ключа истёк.",
 }
-
 
 def reason_to_text(reason):
     if reason in REASON_TEXT:
@@ -440,8 +495,9 @@ def reason_to_text(reason):
         return "⚠️ Сервер лицензий недоступен."
     if reason.startswith("connection_error"):
         return "⚠️ Не удалось связаться с сервером."
+    if reason.startswith("Invalid"):
+        return "❌ Ключ не найден."
     return f"❌ {reason}"
-
 
 def stars(rating):
     return "⭐" * rating + "☆" * (5 - rating)
@@ -451,7 +507,6 @@ def build_review_embed(review, member):
     fb = review["fps_before"]
     fa = review["fps_after"]
     gain = round(((fa - fb) / fb) * 100) if fb else 0
-    scale = max(fb, fa) * 1.05
 
     embed = discord.Embed(
         title="⭐ Новый отзыв",
@@ -467,12 +522,12 @@ def build_review_embed(review, member):
     embed.add_field(name="GPU", value=review["gpu"], inline=True)
     embed.add_field(name="Результаты", value=f"**До:** {fb} FPS\n**После:** {fa} FPS\n📈 **+{gain}%**", inline=False)
     embed.add_field(name="Отзыв", value=f"```{review['feedback']}```", inline=False)
-    embed.set_footer(text="scaredREV")
+    embed.set_footer(text="ScaredOpti Reviews")
     return embed
 
 
 class LicenseModal(Modal, title="Проверка лицензии"):
-    license_key = discord.ui.TextInput(label="Лицензионный ключ", placeholder="XXXX-XXXX-XXXX-XXXX", required=True, max_length=100)
+    license_key = discord.ui.TextInput(label="Лицензионный ключ", placeholder="SCARED-BASIC-XXXXXXXX", required=True, max_length=100)
 
     async def on_submit(self, interaction):
         await interaction.response.defer(ephemeral=True, thinking=True)
@@ -503,13 +558,11 @@ class ReviewModal(Modal, title="Оставить отзыв"):
         except ValueError:
             await interaction.response.send_message("⚠️ Оценка от 1 до 5.", ephemeral=True)
             return
-
         try:
             cpu_str, gpu_str = [p.strip() for p in str(self.cpu_gpu.value).split("/", 1)]
         except ValueError:
             await interaction.response.send_message("⚠️ Укажи CPU/GPU через /", ephemeral=True)
             return
-
         try:
             before_str, after_str = [p.strip() for p in str(self.fps_before_after.value).split("/", 1)]
             fps_before, fps_after = int(before_str), int(after_str)
@@ -553,19 +606,17 @@ class ScreenshotUrlModal(Modal):
 async def finalize_review(interaction, entry):
     save_review(entry)
     pending_reviews.pop(entry["id"], None)
-    mod_channel = bot.get_channel(MOD_CHANNEL_ID)
-    if mod_channel is None:
-        await interaction.response.send_message("⚠️ Канал модерации не настроен.", ephemeral=True)
+    channel = bot.get_channel(PUBLIC_REVIEWS_CHANNEL_ID)
+    if channel is None:
+        await interaction.response.send_message("⚠️ Канал отзывов не настроен.", ephemeral=True)
         return
     member = interaction.user
     embed = build_review_embed(entry, member)
     view = discord.ui.View()
-    view.add_item(discord.ui.Button(label="BEFORE", url=entry["before_url"], emoji="📸"))
-    view.add_item(discord.ui.Button(label="AFTER", url=entry["after_url"], emoji="📸"))
-    view.add_item(discord.ui.Button(label="✅ Опубликовать", style=discord.ButtonStyle.success, custom_id=f"rev:approve:{entry['id']}"))
-    view.add_item(discord.ui.Button(label="❌ Отклонить", style=discord.ButtonStyle.danger, custom_id=f"rev:reject:{entry['id']}"))
-    await mod_channel.send(embed=embed, view=view)
-    await interaction.response.send_message("🎉 Отзыв отправлен на модерацию!", ephemeral=True)
+    view.add_item(discord.ui.Button(label="📸 BEFORE", url=entry["before_url"]))
+    view.add_item(discord.ui.Button(label="📸 AFTER", url=entry["after_url"]))
+    await channel.send(embed=embed, view=view)
+    await interaction.response.send_message("🎉 Отзыв опубликован!", ephemeral=True)
 
 
 pending_reviews = {}
@@ -599,7 +650,7 @@ class ReviewPanelView(View):
     def __init__(self):
         super().__init__(timeout=None)
 
-    @discord.ui.button(label="📝 Оставить отзыв", style=discord.ButtonStyle.primary, custom_id="scaredrev:start_review")
+    @discord.ui.button(label="📝 Оставить отзыв", style=discord.ButtonStyle.primary, custom_id="scaredopti:start_review")
     async def start_review(self, interaction, button):
         await interaction.response.send_modal(LicenseModal())
 
@@ -636,7 +687,7 @@ class AppModal(Modal):
         }
         desired_role = self.children[4].value
         channel = await guild.create_text_channel(
-            f"тикет-{user.name.lower().replace(' ', '-')}", category=category,
+            f"ticket-{user.name.lower().replace(' ', '-')}", category=category,
             topic=f"Роль: {desired_role} | ID: {user.id}", overwrites=overwrites
         )
         embed = discord.Embed(title="Новая заявка", description=f"{user.mention}", color=discord.Color.green(), timestamp=datetime.datetime.now())
@@ -648,9 +699,6 @@ class AppModal(Modal):
         embed.set_footer(text=f"User ID: {user.id}")
         await channel.send(f"{user.mention}", embed=embed, view=TicketActions())
         await interaction.followup.send(f"✅ Тикет создан: {channel.mention}", ephemeral=True)
-
-    async def on_error(self, interaction, error):
-        await interaction.response.send_message("❌ Ошибка. Попробуйте снова.", ephemeral=True)
 
 
 class AddUserModal(Modal):
@@ -677,7 +725,8 @@ class ConfirmClose(View):
     async def confirm(self, interaction, button):
         await interaction.response.edit_message(content="🔒 Закрывается через 5 сек...", view=None)
         await asyncio.sleep(5)
-        await self.channel.delete()
+        try: await self.channel.delete()
+        except: pass
 
     @discord.ui.button(label="Отмена", style=discord.ButtonStyle.secondary)
     async def cancel(self, interaction, button):
@@ -688,10 +737,10 @@ class TicketActions(View):
     def __init__(self):
         super().__init__(timeout=None)
 
-    @discord.ui.button(label="Выдать роль", style=discord.ButtonStyle.success, emoji="🎖️", custom_id="ticket:role")
+    @discord.ui.button(label="🎖️ Выдать роль", style=discord.ButtonStyle.success, custom_id="ticket:role")
     async def assign_role(self, interaction, button):
         if not any(r.id == ADMIN_ROLE_ID for r in interaction.user.roles):
-            await interaction.response.send_message("❌ Только администратор может выдавать роли.", ephemeral=True)
+            await interaction.response.send_message("❌ Только администратор.", ephemeral=True)
             return
         if not interaction.channel.topic or "Роль:" not in interaction.channel.topic:
             await interaction.response.send_message("❌ Информация о роли не найдена.", ephemeral=True)
@@ -701,23 +750,16 @@ class TicketActions(View):
             desired_role_name = parts[0].replace("Роль: ", "")
             user_id = int(parts[1].replace("ID: ", ""))
         except:
-            await interaction.response.send_message("❌ Ошибка чтения данных тикета.", ephemeral=True)
+            await interaction.response.send_message("❌ Ошибка чтения.", ephemeral=True)
             return
         member = interaction.guild.get_member(user_id)
         if not member:
             await interaction.response.send_message("❌ Пользователь не на сервере.", ephemeral=True)
             return
-        roles = interaction.guild.roles
-        matches = []
-        for r in roles:
-            if r.name.lower() == desired_role_name.lower():
-                matches = [r]
-                break
+        matches = [r for r in interaction.guild.roles if r.name.lower() == desired_role_name.lower()]
         if not matches:
-            matches = [r for r in roles if desired_role_name.lower() in r.name.lower() or r.name.lower() in desired_role_name.lower()]
-        if not matches:
-            close = difflib.get_close_matches(desired_role_name, [r.name for r in roles], n=3, cutoff=0.5)
-            matches = [r for r in roles if r.name in close]
+            close = difflib.get_close_matches(desired_role_name, [r.name for r in interaction.guild.roles], n=3, cutoff=0.5)
+            matches = [r for r in interaction.guild.roles if r.name in close]
         if not matches:
             await interaction.response.send_message(f"❌ Роль \"{desired_role_name}\" не найдена.", ephemeral=True)
             return
@@ -734,12 +776,12 @@ class TicketActions(View):
         await member.add_roles(role, reason="Выдача роли через тикет")
         await interaction.response.send_message(f"✅ {member.mention} выдана роль `{role.name}`.", ephemeral=True)
 
-    @discord.ui.button(label="Закрыть", style=discord.ButtonStyle.danger, emoji="🔒", custom_id="ticket:close")
+    @discord.ui.button(label="🔒 Закрыть", style=discord.ButtonStyle.danger, custom_id="ticket:close")
     async def close(self, interaction, button):
         embed = discord.Embed(title="Закрыть тикет?", color=discord.Color.red())
         await interaction.response.send_message(embed=embed, view=ConfirmClose(interaction.channel))
 
-    @discord.ui.button(label="Добавить", style=discord.ButtonStyle.success, emoji="➕", custom_id="ticket:add")
+    @discord.ui.button(label="➕ Добавить", style=discord.ButtonStyle.success, custom_id="ticket:add")
     async def add_user(self, interaction, button):
         await interaction.response.send_modal(AddUserModal(channel=interaction.channel))
 
@@ -749,30 +791,13 @@ class OpenTicketBtn(View):
         super().__init__(timeout=None)
         self.bot = bot
 
-    @discord.ui.button(label="Create Ticket", style=discord.ButtonStyle.primary, emoji="🎫", custom_id="persistent:ticket_open")
+    @discord.ui.button(label="🎫 Create Ticket", style=discord.ButtonStyle.primary, custom_id="persistent:ticket_open")
     async def create(self, interaction, button):
         await interaction.response.send_modal(AppModal(self.bot))
 
 
 # ══════════════════════════════════════════════════════════════
-# 🧩 ЗАГРУЗКА COGS ИЗ ПАПКИ
-# ══════════════════════════════════════════════════════════════
-
-async def load_cogs():
-    if not os.path.isdir("cogs"):
-        print("[!] No cogs/ folder found, skipping")
-        return
-    for f in os.listdir("cogs"):
-        if f.endswith(".py") and f != "__init__.py":
-            try:
-                await bot.load_extension(f"cogs.{f[:-3]}")
-                print(f"[+] Loaded cog: {f[:-3]}")
-            except Exception as e:
-                print(f"[!] Failed to load {f}: {e}")
-
-
-# ══════════════════════════════════════════════════════════════
-# 🤖 КОМАНДЫ БОТА
+# 🤖 СОБЫТИЯ И КОМАНДЫ
 # ══════════════════════════════════════════════════════════════
 
 @bot.event
@@ -788,251 +813,6 @@ async def on_ready():
     await bot.change_presence(activity=discord.Game(name=f"{PREFIX}help"))
 
 
-@bot.command()
-@commands.is_owner()
-async def load(ctx, extension: str):
-    await bot.load_extension(f"cogs.{extension.lower()}")
-    await ctx.send(f"✅ Cog `{extension}` loaded.")
-
-
-@bot.command()
-@commands.is_owner()
-async def unload(ctx, extension: str):
-    await bot.unload_extension(f"cogs.{extension.lower()}")
-    await ctx.send(f"✅ Cog `{extension}` unloaded.")
-
-
-@bot.command()
-@commands.is_owner()
-async def reload(ctx, extension: str = None):
-    if extension:
-        await bot.reload_extension(f"cogs.{extension.lower()}")
-        await ctx.send(f"✅ Cog `{extension}` reloaded.")
-    else:
-        for f in os.listdir("cogs"):
-            if f.endswith(".py") and f != "__init__.py":
-                await bot.reload_extension(f"cogs.{f[:-3]}")
-        await ctx.send("✅ All cogs reloaded.")
-
-
-@bot.command()
-@commands.is_owner()
-async def ticket(ctx, action: str = None, member: discord.Member = None):
-    if not action:
-        embed = discord.Embed(title="Команды тикетов", description="`!ticket setup` — Панель заявок\n`!ticket close` — Закрыть\n`!ticket add @user` — Добавить\n`!ticket remove @user` — Убрать", color=discord.Color.blue())
-        await ctx.send(embed=embed)
-        return
-    if action == "setup":
-        embed = discord.Embed(title="Подача заявки в клан", description="Нажмите кнопку ниже.\n\nТребования: **от 2 000 часов**.", color=discord.Color.blue())
-        await ctx.send(embed=embed, view=OpenTicketBtn(bot))
-    elif action == "close":
-        if not ctx.channel.name.startswith("тикет-") and not ctx.channel.name.startswith("ticket-"):
-            await ctx.send("❌ Это не тикет.")
-            return
-        await ctx.send(embed=discord.Embed(title="Закрыть тикет?", color=discord.Color.red()), view=ConfirmClose(ctx.channel))
-    elif action == "add":
-        if not ctx.channel.name.startswith("тикет-") and not ctx.channel.name.startswith("ticket-"):
-            await ctx.send("❌ Это не тикет.")
-            return
-        if not member:
-            await ctx.send("Использование: `!ticket add @user`")
-            return
-        await ctx.channel.set_permissions(member, read_messages=True, send_messages=True, attach_files=True, embed_links=True)
-        await ctx.send(f"✅ {member.mention} добавлен.")
-    elif action == "remove":
-        if not ctx.channel.name.startswith("тикет-") and not ctx.channel.name.startswith("ticket-"):
-            await ctx.send("❌ Это не тикет.")
-            return
-        if not member:
-            await ctx.send("Использование: `!ticket remove @user`")
-            return
-        await ctx.channel.set_permissions(member, overwrite=None)
-        await ctx.send(f"✅ {member.mention} убран.")
-
-
-# Клонирование (встроено, без отдельного cog)
-async def _get_source(server_id):
-    guild = discord.utils.get(bot.guilds, id=server_id)
-    if guild:
-        return guild, True
-    try:
-        guild = await bot.fetch_guild(server_id)
-        return guild, False
-    except Exception as e:
-        print(f"[!] fetch_guild error: {type(e).__name__}: {e}")
-        return None, False
-
-
-async def _copy_server(source, target):
-    await target.edit(name=source.name)
-    if source.icon:
-        try:
-            await target.edit(icon=await source.icon.read())
-        except:
-            pass
-    if source.banner:
-        try:
-            await target.edit(banner=await source.banner.read())
-        except:
-            pass
-    if source.description:
-        try:
-            await target.edit(description=source.description)
-        except:
-            pass
-
-
-async def _copy_roles(source, target):
-    existing = {r.name for r in target.roles}
-    to_copy = sorted([r for r in source.roles if r.name != "@everyone"], key=lambda r: r.position, reverse=True)
-    count = 0
-    for role in to_copy:
-        if role.name not in existing:
-            try:
-                await target.create_role(name=role.name, permissions=role.permissions, color=role.color, hoist=role.hoist, mentionable=role.mentionable, reason=f"Cloned from {source.name}")
-                count += 1
-                await asyncio.sleep(0.5)
-            except:
-                pass
-    return count
-
-
-async def _copy_channels(source, target):
-    for ch in target.channels:
-        try:
-            await ch.delete()
-            await asyncio.sleep(0.3)
-        except:
-            pass
-    categories = sorted(source.categories, key=lambda c: c.position)
-    cat_map = {}
-    for cat in categories:
-        overwrites = {}
-        for t, o in cat.overwrites.items():
-            if isinstance(t, discord.Role):
-                role = discord.utils.get(target.roles, name=t.name)
-                if role:
-                    overwrites[role] = o
-        nc = await target.create_category(name=cat.name, overwrites=overwrites or None, position=cat.position)
-        cat_map[cat.id] = nc
-        await asyncio.sleep(0.5)
-    for ch in source.channels:
-        if isinstance(ch, discord.CategoryChannel):
-            continue
-        cat = cat_map.get(ch.category_id) if ch.category_id else None
-        overwrites = {}
-        for t, o in ch.overwrites.items():
-            if isinstance(t, discord.Role):
-                role = discord.utils.get(target.roles, name=t.name)
-                if role:
-                    overwrites[role] = o
-        try:
-            if isinstance(ch, discord.TextChannel):
-                await target.create_text_channel(name=ch.name, category=cat, topic=ch.topic, slowmode_delay=ch.slowmode_delay, nsfw=ch.nsfw, position=ch.position, overwrites=overwrites or None)
-            elif isinstance(ch, discord.VoiceChannel):
-                await target.create_voice_channel(name=ch.name, category=cat, user_limit=ch.user_limit, bitrate=ch.bitrate, position=ch.position, overwrites=overwrites or None)
-            await asyncio.sleep(0.5)
-        except:
-            pass
-
-
-async def _copy_emojis(source, target):
-    count = 0
-    for emoji in source.emojis:
-        try:
-            await target.create_custom_emoji(name=emoji.name, image=await emoji.read(), reason=f"Cloned from {source.name}")
-            count += 1
-            await asyncio.sleep(0.5)
-        except:
-            pass
-    return count
-
-
-@bot.group(invoke_without_command=True)
-@commands.is_owner()
-async def clone(ctx):
-    embed = discord.Embed(title="Clone Commands", description="`!clone server <id>`\n`!clone roles <id>`\n`!clone channels <id>`\n`!clone emojis <id>`\n`!clone all <id>`", color=discord.Color.blue())
-    await ctx.send(embed=embed)
-
-
-@clone.command()
-@commands.is_owner()
-async def server(ctx, server_id: int):
-    source, ing = await _get_source(server_id)
-    if not source:
-        await ctx.send("❌ Server not found.")
-        return
-    await ctx.send(f"🔄 Copying server info from `{source.name}`...")
-    await _copy_server(source, ctx.guild)
-    await ctx.send(f"✅ Server name and icon copied from `{source.name}`")
-
-
-@clone.command()
-@commands.is_owner()
-async def roles(ctx, server_id: int):
-    source, ing = await _get_source(server_id)
-    if not source:
-        await ctx.send("❌ Server not found.")
-        return
-    if source.id == ctx.guild.id:
-        await ctx.send("❌ Cannot clone roles from the same server.")
-        return
-    await ctx.send(f"🔄 Cloning roles from `{source.name}`...")
-    count = await _copy_roles(source, ctx.guild)
-    await ctx.send(f"✅ Created {count} roles from `{source.name}`")
-
-
-@clone.command()
-@commands.is_owner()
-async def channels(ctx, server_id: int):
-    source = discord.utils.get(bot.guilds, id=server_id)
-    if not source:
-        await ctx.send("❌ Bot must be in that server to clone channels.")
-        return
-    if source.id == ctx.guild.id:
-        await ctx.send("❌ Cannot clone channels from the same server.")
-        return
-    await ctx.send(f"🔄 Cloning channels from `{source.name}`...")
-    await _copy_channels(source, ctx.guild)
-    await ctx.send(f"✅ Channels cloned from `{source.name}`")
-
-
-@clone.command()
-@commands.is_owner()
-async def emojis(ctx, server_id: int):
-    source, ing = await _get_source(server_id)
-    if not source:
-        await ctx.send("❌ Server not found.")
-        return
-    await ctx.send(f"🔄 Cloning emojis from `{source.name}`...")
-    count = await _copy_emojis(source, ctx.guild)
-    await ctx.send(f"✅ Copied {count} emojis from `{source.name}`")
-
-
-@clone.command()
-@commands.is_owner()
-async def all(ctx, server_id: int):
-    source, ing = await _get_source(server_id)
-    if not source:
-        await ctx.send("❌ Server not found.")
-        return
-    await ctx.send(f"🔄 Full clone from `{source.name}` started...")
-    await _copy_server(source, ctx.guild)
-    await _copy_roles(source, ctx.guild)
-    await _copy_emojis(source, ctx.guild)
-    if ing and source.id != ctx.guild.id:
-        await _copy_channels(source, ctx.guild)
-    elif source.id == ctx.guild.id:
-        pass
-    else:
-        await ctx.send("⚠️ Bot not in target server — channels skipped.")
-    await ctx.send(f"✅ Server fully cloned from `{source.name}`")
-
-
-# ══════════════════════════════════════════════════════════════
-# 🚀 ЗАПУСК
-# ══════════════════════════════════════════════════════════════
-
 @bot.event
 async def on_message(message):
     if message.author.bot:
@@ -1040,11 +820,62 @@ async def on_message(message):
     await bot.process_commands(message)
 
 
-async def setup_hook():
-    await load_cogs()
+@bot.command()
+async def review(ctx):
+    embed = discord.Embed(
+        title="📝 Оставить отзыв",
+        description="Нажми кнопку ниже, подтверди ключ и напиши отзыв об оптимизации.",
+        color=discord.Color.blue()
+    )
+    await ctx.send(embed=embed, view=ReviewPanelView())
 
-bot.setup_hook = setup_hook
 
+@bot.command()
+@commands.is_owner()
+async def ticket(ctx, action: str = None, member: discord.Member = None):
+    if not action:
+        embed = discord.Embed(title="Команды тикетов", description="`!ticket setup` — Панель\n`!ticket close` — Закрыть\n`!ticket add @user` — Добавить\n`!ticket remove @user` — Убрать", color=discord.Color.blue())
+        await ctx.send(embed=embed)
+        return
+    if action == "setup":
+        embed = discord.Embed(title="Подача заявки в клан", description="Нажмите кнопку ниже.\n\nТребования: **от 2 000 часов**.", color=discord.Color.blue())
+        await ctx.send(embed=embed, view=OpenTicketBtn(bot))
+    elif action == "close":
+        if not ctx.channel.name.startswith("ticket-"):
+            await ctx.send("❌ Это не тикет.")
+            return
+        await ctx.send(embed=discord.Embed(title="Закрыть тикет?", color=discord.Color.red()), view=ConfirmClose(ctx.channel))
+    elif action == "add":
+        if not ctx.channel.name.startswith("ticket-"):
+            await ctx.send("❌ Это не тикет.")
+            return
+        if not member: return await ctx.send("Использование: `!ticket add @user`")
+        await ctx.channel.set_permissions(member, read_messages=True, send_messages=True, attach_files=True, embed_links=True)
+        await ctx.send(f"✅ {member.mention} добавлен.")
+    elif action == "remove":
+        if not ctx.channel.name.startswith("ticket-"):
+            await ctx.send("❌ Это не тикет.")
+            return
+        if not member: return await ctx.send("Использование: `!ticket remove @user`")
+        await ctx.channel.set_permissions(member, overwrite=None)
+        await ctx.send(f"✅ {member.mention} убран.")
+
+
+@bot.command()
+@commands.is_owner()
+async def say(ctx, *, message: str):
+    await ctx.send(message)
+
+
+@bot.command()
+@commands.is_owner()
+async def ping(ctx):
+    await ctx.send(f"🏓 {round(bot.latency * 1000)}ms")
+
+
+# ══════════════════════════════════════════════════════════════
+# 🚀 ЗАПУСК
+# ══════════════════════════════════════════════════════════════
 
 async def main():
     flask_thread = threading.Thread(target=run_flask, daemon=True)
